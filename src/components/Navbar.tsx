@@ -354,10 +354,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           top: 100%;
           left: 0;
           width: 100%;
-          background: var(--dropdown-bg);
-          border-bottom: 1px solid var(--border-yellow);
-          padding: 24px;
-          box-shadow: var(--navbar-shadow);
+          background: #FFFFFF !important;
+          border-bottom: 2px solid var(--border-yellow);
+          padding: 20px 24px 28px;
+          box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
+          z-index: 1001;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+        [data-theme="dark"] .cc-mobile-menu-drawer {
+          background: #0E1117 !important;
+          box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+        }
+        .cc-navbar-header.mobile-open {
+          background: #FFFFFF !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+        [data-theme="dark"] .cc-navbar-header.mobile-open {
+          background: #0E1117 !important;
         }
         .cc-mobile-menu-drawer.open {
           display: block;
@@ -386,9 +401,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           left: 0;
           width: 100vw;
           height: 100vh;
-          background: rgba(0, 0, 0, 0.65);
-          backdrop-filter: blur(4px);
-          -webkit-backdrop-filter: blur(4px);
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
           z-index: 998;
         }
         @media (min-width: 1025px) {
@@ -407,7 +422,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         }
       `}</style>
 
-      <header className={`cc-navbar-header ${isScrolled ? 'scrolled' : ''}`}>
+      <header className={`cc-navbar-header ${isScrolled ? 'scrolled' : ''} ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="cc-navbar-container">
           {/* Brand Logo */}
           <a href="#home" className="cc-navbar-logo" onClick={(e) => { e.preventDefault(); handleNavClick('home'); }}>

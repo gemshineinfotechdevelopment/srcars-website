@@ -22,6 +22,7 @@ import {
   useServicesList,
   saveServiceItem,
   deleteServiceItem,
+  resolveServiceImage,
   type ServiceItem
 } from '../utils/servicesStore';
 import {
@@ -1773,7 +1774,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                   <div key={service.id} className="admin-service-card">
                     <div className="admin-service-thumb-wrap">
                       <img 
-                        src={service.thumbnail} 
+                        src={resolveServiceImage(service.thumbnail)} 
                         alt={service.name} 
                         className="admin-service-thumb"
                         onError={(e) => {

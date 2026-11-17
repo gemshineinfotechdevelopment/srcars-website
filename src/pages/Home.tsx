@@ -5,7 +5,7 @@ import interiorImg from '../assets/interior_detailing.jpg';
 import techCarImg from '../assets/tech_car.jpg';
 import detailAfterImg from '../assets/detail_after.jpg';
 import heroBannerVideo from '../assets/hero_banner.mp4';
-import { useServicesList } from '../utils/servicesStore';
+import { useServicesList, resolveServiceImage } from '../utils/servicesStore';
 import {
   DiamondIcon,
   SparkleIcon,
@@ -1683,7 +1683,14 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
                     }}
                   >
                     <div className="thumb-frame">
-                      <img src={service.thumbnail} alt={service.name} className="service-thumb-img" />
+                      <img 
+                        src={resolveServiceImage(service.thumbnail, detailAfterImg)} 
+                        alt={service.name} 
+                        className="service-thumb-img" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = detailAfterImg;
+                        }}
+                      />
                     </div>
                     <div className="service-info-wrap">
                       <div className="title-row">
@@ -1711,9 +1718,12 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
                 >
                   <div className="showcase-banner">
                     <img 
-                      src={activeService.showcaseImg} 
+                      src={resolveServiceImage(activeService.showcaseImg, technicianImg)} 
                       alt={activeService.showcaseTitle} 
                       className="showcase-img" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = technicianImg;
+                      }}
                     />
                     <div className="showcase-gradient-overlay"></div>
                     <div className="showcase-header-overlay">

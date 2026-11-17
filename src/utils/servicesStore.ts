@@ -27,6 +27,25 @@ import { API_ENDPOINTS } from '../config/api';
 const STORAGE_KEY = 'cc_services_catalog_v1';
 const API_URL = API_ENDPOINTS.services;
 
+const assetMap: Record<string, string> = {
+  '/assets/detail_after.jpg': detailAfterImg,
+  '/assets/service_technician.jpg': technicianImg,
+  '/assets/interior_detailing.jpg': interiorImg,
+  '/assets/tech_car.jpg': techCarImg,
+  'detail_after.jpg': detailAfterImg,
+  'service_technician.jpg': technicianImg,
+  'interior_detailing.jpg': interiorImg,
+  'tech_car.jpg': techCarImg,
+};
+
+export const resolveServiceImage = (imgPath: string | undefined, defaultFallback: string = technicianImg): string => {
+  if (!imgPath) return defaultFallback;
+  if (assetMap[imgPath]) return assetMap[imgPath];
+  const basename = imgPath.split('/').pop();
+  if (basename && assetMap[basename]) return assetMap[basename];
+  return imgPath;
+};
+
 export const defaultServicesCatalog: ServiceItem[] = [
   {
     id: 'ceramic',
@@ -106,7 +125,17 @@ export const getStoredServices = (): ServiceItem[] => {
   }
   try {
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultServicesCatalog;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map((s: any, idx: number) => {
+        const fallback = defaultServicesCatalog[idx % defaultServicesCatalog.length];
+        return {
+          ...s,
+          thumbnail: resolveServiceImage(s.thumbnail, fallback.thumbnail),
+          showcaseImg: resolveServiceImage(s.showcaseImg, fallback.showcaseImg),
+        };
+      });
+    }
+    return defaultServicesCatalog;
   } catch {
     return defaultServicesCatalog;
   }
@@ -118,12 +147,14 @@ export const fetchRemoteServices = async (): Promise<ServiceItem[]> => {
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-        // Map any image assets if empty
-        const mapped = json.data.map((s: any, idx: number) => ({
-          ...s,
-          thumbnail: s.thumbnail || defaultServicesCatalog[idx % defaultServicesCatalog.length].thumbnail,
-          showcaseImg: s.showcaseImg || defaultServicesCatalog[idx % defaultServicesCatalog.length].showcaseImg
-        }));
+        const mapped = json.data.map((s: any, idx: number) => {
+          const fallback = defaultServicesCatalog[idx % defaultServicesCatalog.length];
+          return {
+            ...s,
+            thumbnail: resolveServiceImage(s.thumbnail, fallback.thumbnail),
+            showcaseImg: resolveServiceImage(s.showcaseImg, fallback.showcaseImg),
+          };
+        });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
         window.dispatchEvent(new Event('cc_services_updated'));
         return mapped;
