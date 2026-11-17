@@ -22,8 +22,10 @@ export interface ServiceItem {
   addon: string;
 }
 
+import { API_ENDPOINTS } from '../config/api';
+
 const STORAGE_KEY = 'cc_services_catalog_v1';
-const API_URL = 'http://localhost:5000/api/services';
+const API_URL = API_ENDPOINTS.services;
 
 export const defaultServicesCatalog: ServiceItem[] = [
   {

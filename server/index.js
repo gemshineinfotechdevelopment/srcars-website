@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Settings } from './models/Settings.js';
 import { Booking } from './models/Booking.js';
 import { Customer } from './models/Customer.js';
@@ -9,8 +11,12 @@ import { Service } from './models/Service.js';
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.join(__dirname, '../dist');
+
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5030;
 
 // Enable CORS for frontend Vite dev server (port 5173) and any local origin
 app.use(cors({
@@ -462,8 +468,21 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.get('/', (req, res) => {
-  res.send('Car Care Backend API Server is active on port ' + PORT);
+// ==========================================
+// 6. STATIC ASSET SERVING & SPA FALLBACK
+// ==========================================
+app.use(express.static(distPath));
+
+// For all non-API GET requests, serve Vite's index.html
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ success: false, error: 'API route not found' });
+  }
+  res.sendFile(path.join(distPath, 'index.html'), (err) => {
+    if (err) {
+      res.send(`Car Care Backend API Server is active on port ${PORT}`);
+    }
+  });
 });
 
 // Start Server

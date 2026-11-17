@@ -12,8 +12,10 @@ export const getServicePrice = (service: string): string => {
   return '₹899';
 };
 
+import { API_ENDPOINTS } from '../config/api';
+
 const STORAGE_KEY = 'cc_admin_bookings_data';
-const BOOKINGS_API = 'http://localhost:5000/api/bookings';
+const BOOKINGS_API = API_ENDPOINTS.bookings;
 
 const initialDemoBookings: BookingRecord[] = [
   {

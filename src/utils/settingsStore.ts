@@ -23,10 +23,10 @@ export const defaultSiteSettings: SiteSettings = {
   ]
 };
 
+import { API_ENDPOINTS } from '../config/api';
+
 const SETTINGS_KEY = 'cc_site_settings_data';
-const API_URL = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL.replace(/\/api$/, '')}/api/settings`
-  : 'http://localhost:5000/api/settings';
+const API_URL = API_ENDPOINTS.settings;
 
 export const getSiteSettings = (): SiteSettings => {
   try {
