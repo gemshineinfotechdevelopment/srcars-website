@@ -15,6 +15,7 @@ export const API_BASE_URL: string =
 
 export const API_ENDPOINTS = {
   services: `${API_BASE_URL}/services`,
+  works: `${API_BASE_URL}/works`,
   settings: `${API_BASE_URL}/settings`,
   bookings: `${API_BASE_URL}/bookings`,
   customers: `${API_BASE_URL}/customers`,

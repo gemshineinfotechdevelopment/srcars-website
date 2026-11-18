@@ -346,10 +346,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           {!isSubmitted ? (
             <>
               <div className="cc-modal-header">
-                <div className="cc-modal-badge">
-                  <span className="cc-badge-dot"></span>
-                  <span>EXCLUSIVE STUDIO APPOINTMENT</span>
-                </div>
                 <h3 className="cc-modal-title">
                   SCHEDULE <span className="highlight">YOUR DETAILING</span>
                 </h3>

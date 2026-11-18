@@ -17,96 +17,58 @@ import { API_ENDPOINTS } from '../config/api';
 const STORAGE_KEY = 'cc_admin_bookings_data';
 const BOOKINGS_API = API_ENDPOINTS.bookings;
 
-const initialDemoBookings: BookingRecord[] = [
-  {
-    id: 'CC-948123',
-    customerName: 'Vikramaditya Roy',
-    phone: '+91 98401 23456',
-    carModel: 'Porsche 911 GT3 RS',
-    service: 'Ceramic & Graphene Coating',
-    date: '2026-11-18',
-    status: 'Confirmed',
-    notes: 'Requested extra 2 layers on front hood and ceramic caliper protection.',
-    price: '₹899',
-    studio: 'Chennai Studio (Guindy)',
-    createdAt: '2026-11-15T10:30:00Z',
-  },
-  {
-    id: 'CC-812049',
-    customerName: 'Ananya Deshmukh',
-    phone: '+91 97112 88490',
-    carModel: 'McLaren 720S Spider',
-    service: 'Full Body Armor PPF',
-    date: '2026-11-19',
-    status: 'Pending',
-    notes: 'Doorstep enclosed flatbed pickup required from ECR villa.',
-    price: '₹4,999',
-    studio: 'Chennai Studio (Guindy)',
-    createdAt: '2026-11-16T08:15:00Z',
-  },
-  {
-    id: 'CC-736201',
-    customerName: 'Rajesh K. Sundaram',
-    phone: '+91 94441 55678',
-    carModel: 'Mercedes-AMG G63',
-    service: 'Interior Sanctuary Spa',
-    date: '2026-11-16',
-    status: 'In Bay',
-    notes: 'Swissvax leather re-nourishment and full ozone AC purge in progress.',
-    price: '₹1,499',
-    studio: 'Bangalore Studio (Indiranagar)',
-    createdAt: '2026-11-14T14:20:00Z',
-  },
-  {
-    id: 'CC-654912',
-    customerName: 'Karthik Narayanan',
-    phone: '+91 98840 99123',
-    carModel: 'BMW M4 Competition',
-    service: 'Stage 2/3 Paint Correction',
-    date: '2026-11-17',
-    status: 'Confirmed',
-    notes: 'Clear coat measurement revealed track-day swirl marks. Level 2 rotary buffing needed.',
-    price: '₹2,199',
-    studio: 'Coimbatore Studio (Peelamedu)',
-    createdAt: '2026-11-15T16:45:00Z',
-  },
-  {
-    id: 'CC-521980',
-    customerName: 'Deepak Chawla',
-    phone: '+91 99001 44556',
-    carModel: 'Audi RS7 Sportback',
-    service: 'Ceramic & Graphene Coating',
-    date: '2026-11-14',
-    status: 'Completed',
-    notes: 'Completed with 10H dual matrix cure. 5-year warranty logged and delivered.',
-    price: '₹899',
-    studio: 'Bangalore Studio (Indiranagar)',
-    createdAt: '2026-11-12T11:00:00Z',
-  },
+const DUMMY_DEMO_NAMES = [
+  'Vikramaditya Roy',
+  'Ananya Deshmukh',
+  'Rajesh K. Sundaram',
+  'Karthik Narayanan',
+  'Deepak Chawla'
 ];
+
+const initialDemoBookings: BookingRecord[] = [];
 
 export const getBookings = (): BookingRecord[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialDemoBookings));
-      return initialDemoBookings;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
-    return JSON.parse(raw);
+    const parsed: BookingRecord[] = JSON.parse(raw);
+    
+    // Purge any dummy demo records
+    const clean = parsed.filter(b => !DUMMY_DEMO_NAMES.includes(b.customerName));
+
+    if (clean.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      return clean;
+    }
+    return parsed;
   } catch (err) {
     console.error('Failed to load bookings from storage', err);
-    return initialDemoBookings;
+    return [];
   }
 };
 
 export const saveBooking = (newRecord: Omit<BookingRecord, 'id' | 'createdAt'> & { id?: string }): BookingRecord => {
   const current = getBookings();
   const calculatedPrice = newRecord.price || getServicePrice(newRecord.service);
+
+  // Compute next sequential ID: 1001, 1002, 1003, ...
+  const nextId = newRecord.id || (() => {
+    const numericIds = current
+      .map(b => parseInt(b.id.replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
+    const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 1000;
+    return String(Math.max(maxId + 1, 1001));
+  })();
+
   const fullRecord: BookingRecord = {
-    id: newRecord.id || `CC-${Math.floor(100000 + Math.random() * 900000)}`,
+    id: nextId,
     customerName: newRecord.customerName,
     phone: newRecord.phone,
     carModel: newRecord.carModel,
+    vehicleNumber: newRecord.vehicleNumber,
     service: newRecord.service,
     date: newRecord.date,
     status: newRecord.status || 'Pending',
@@ -114,6 +76,7 @@ export const saveBooking = (newRecord: Omit<BookingRecord, 'id' | 'createdAt'> &
     price: calculatedPrice,
     studio: newRecord.studio || 'Chennai Studio (Guindy)',
     createdAt: new Date().toISOString(),
+    isNew: true, // Marked as new so admin sees NEW badge
   };
 
   const updated = [fullRecord, ...current];
@@ -176,6 +139,17 @@ export const deleteBooking = (id: string): void => {
     fetch(`${BOOKINGS_API}/${id}`, { method: 'DELETE' }).catch(() => {});
   } catch (err) {
     console.error('Failed to delete booking', err);
+  }
+};
+
+export const markBookingAsSeen = (id: string): void => {
+  const current = getBookings();
+  const updated = current.map((item) => (item.id === id ? { ...item, isNew: false } : item));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new Event('cc_bookings_updated'));
+  } catch (err) {
+    console.error('Failed to mark booking as seen', err);
   }
 };
 

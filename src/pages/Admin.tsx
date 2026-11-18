@@ -26,6 +26,13 @@ import {
   type ServiceItem
 } from '../utils/servicesStore';
 import {
+  useWorksList,
+  saveWorkItem,
+  deleteWorkItem,
+  resolveWorkImage,
+  type WorkItem
+} from '../utils/worksStore';
+import {
   BarChartIcon,
   CalendarIcon,
   UsersIcon,
@@ -37,7 +44,13 @@ import {
   LogoutIcon,
   AlertTriangleIcon,
   CheckCircleIcon,
-  SparkleIcon
+  FileTextIcon,
+  PhoneCallIcon,
+  WhatsAppIcon,
+  TrashBinIcon,
+  ServicesWorksIcon,
+  MenuIcon,
+  CloseIcon
 } from '../components/Icons';
 
 interface AdminProps {
@@ -50,9 +63,14 @@ const AUTH_STORAGE_KEY = 'cc_admin_session_auth';
 const CREDENTIALS_KEY = 'cc_admin_credentials';
 
 export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
-  // Authentication State
+  // Authentication State - prompt when opening page
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem(AUTH_STORAGE_KEY) === 'true';
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (e) {
+      // ignore
+    }
+    return sessionStorage.getItem(AUTH_STORAGE_KEY) === 'true';
   });
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -60,6 +78,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+
+  // Auto close mobile drawer on resize to desktop (> 768px)
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 768) {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleTabSelect = (tab: AdminTab) => {
+    setActiveTab(tab);
+    setIsMobileSidebarOpen(false);
+  };
 
   // Services State (Dynamic Catalog)
   const servicesList = useServicesList();
@@ -81,6 +116,25 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
       { title: '', desc: '' },
     ],
     addon: '',
+  });
+
+  // Services & Our Works Sub-Tab State
+  const [servicesSubTab, setServicesSubTab] = useState<'catalog' | 'works'>('catalog');
+
+  // Our Works State (Dynamic Showroom Transformations)
+  const worksList = useWorksList();
+  const [isWorkModalOpen, setIsWorkModalOpen] = useState(false);
+  const [editingWork, setEditingWork] = useState<WorkItem | null>(null);
+  const [workFormData, setWorkFormData] = useState<WorkItem>({
+    id: '',
+    title: '',
+    category: 'CERAMIC',
+    service: '',
+    beforeImg: '',
+    afterImg: '',
+    duration: '',
+    warranty: '5-Year Guarantee',
+    description: '',
   });
 
   // Bookings Data
@@ -173,18 +227,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     const validUser = creds ? JSON.parse(creds).username : 'admin';
     const validPass = creds ? JSON.parse(creds).password : 'admin123';
 
-    if (usernameInput === validUser && passwordInput === validPass) {
+    if (usernameInput.trim() === validUser && passwordInput === validPass) {
       setIsAuthenticated(true);
-      localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+      sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
       setLoginError('');
     } else {
-      setLoginError('Invalid credentials. Check demo details below.');
+      setLoginError('Invalid username or password. Please enter the correct admin credentials.');
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (e) {
+      // ignore
+    }
     setUsernameInput('');
     setPasswordInput('');
   };
@@ -268,11 +327,12 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     }
   };
 
-  // Export CSV
+  // Export CSV (Exports active filtered bookings)
   const handleExportCSV = () => {
+    const dataToExport = filteredBookings;
     const headers = ['Booking ID', 'Customer Name', 'Phone', 'Car Model', 'Service', 'Date', 'Studio', 'Status', 'Notes'];
-    const rows = bookings.map((b) => [
-      b.id,
+    const rows = dataToExport.map((b) => [
+      `"${b.id}"`,
       `"${b.customerName}"`,
       `"${b.phone}"`,
       `"${b.carModel}"`,
@@ -287,7 +347,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `car_care_appointments_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `car_care_appointments_${statusFilter.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -296,6 +356,11 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   // Change Admin Credentials
   const handleUpdateCredentials = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newUserInput.trim() && !newPassInput.trim()) {
+      setSettingsNotice('Please enter a new username or new password.');
+      setTimeout(() => setSettingsNotice(''), 3500);
+      return;
+    }
     const updatedUser = newUserInput.trim() || adminUsername;
     const updatedPass = newPassInput.trim() || adminPassword;
     localStorage.setItem(CREDENTIALS_KEY, JSON.stringify({ username: updatedUser, password: updatedPass }));
@@ -303,8 +368,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     setAdminPassword(updatedPass);
     setNewUserInput('');
     setNewPassInput('');
-    setSettingsNotice('Admin credentials successfully updated!');
-    setTimeout(() => setSettingsNotice(''), 3000);
+    setSettingsNotice(`Admin credentials successfully updated! Username: "${updatedUser}".`);
+    setTimeout(() => setSettingsNotice(''), 4000);
   };
 
   // Save Website Settings (Website Name, Mobile Number, Address, Email, Operating Hours)
@@ -385,6 +450,69 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     }
   };
 
+  // Transformation Works Handlers
+  const handleOpenAddWork = () => {
+    setEditingWork(null);
+    setWorkFormData({
+      id: 'work-' + Date.now(),
+      title: '',
+      category: 'CERAMIC',
+      service: '',
+      beforeImg: '',
+      afterImg: '',
+      duration: '',
+      warranty: '5-Year Guarantee',
+      description: '',
+    });
+    setIsWorkModalOpen(true);
+  };
+
+  const handleOpenEditWork = (work: WorkItem) => {
+    setEditingWork(work);
+    setWorkFormData({
+      ...work,
+      beforeImg: work.beforeImg || '',
+      afterImg: work.afterImg || work.img || '',
+      duration: work.duration || '',
+      warranty: work.warranty || '',
+    });
+    setIsWorkModalOpen(true);
+  };
+
+  const handleSaveWork = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const idToUse = editingWork?.id || workFormData.id || 'work-' + Date.now();
+    const payload: WorkItem = {
+      ...workFormData,
+      id: idToUse,
+      img: workFormData.afterImg,
+    };
+    await saveWorkItem(payload);
+    setIsWorkModalOpen(false);
+    setSettingsNotice('Transformation record saved & updated across website!');
+    setTimeout(() => setSettingsNotice(''), 3500);
+  };
+
+  const handleDeleteWork = async (id: string, title: string) => {
+    if (window.confirm(`Are you sure you want to delete "${title}" from transformations?`)) {
+      await deleteWorkItem(id);
+      setSettingsNotice('Transformation record deleted.');
+      setTimeout(() => setSettingsNotice(''), 3000);
+    }
+  };
+
+  const handleWorkImageUpload = (field: 'beforeImg' | 'afterImg', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setWorkFormData(prev => ({ ...prev, [field]: reader.result as string }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Filtered Bookings
   const filteredBookings = bookings.filter((b) => {
     const matchesSearch = 
@@ -397,6 +525,76 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     const matchesStudio = studioFilter === 'ALL' || b.studio?.includes(studioFilter);
     return matchesSearch && matchesStatus && matchesStudio;
   });
+
+  // Appointments Pagination State (Max 10 per page)
+  const [appointmentPage, setAppointmentPage] = useState<number>(1);
+  const APPOINTMENTS_PER_PAGE = 10;
+  const totalAppointmentPages = Math.ceil(filteredBookings.length / APPOINTMENTS_PER_PAGE) || 1;
+  const paginatedBookings = filteredBookings.slice(
+    (appointmentPage - 1) * APPOINTMENTS_PER_PAGE,
+    appointmentPage * APPOINTMENTS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setAppointmentPage(1);
+  }, [searchTerm, statusFilter, studioFilter]);
+
+  // Dynamic Calculations for Reports
+  const serviceStats = React.useMemo(() => {
+    const counts: { [serviceName: string]: number } = {};
+    bookings.forEach((b) => {
+      const sName = b.service || 'Other Detailing';
+      counts[sName] = (counts[sName] || 0) + 1;
+    });
+
+    const total = bookings.length || 1;
+    return Object.entries(counts)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percentage: Math.round((count / total) * 100),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [bookings]);
+
+  const vehicleStats = React.useMemo(() => {
+    const counts: { [car: string]: number } = {};
+    bookings.forEach((b) => {
+      const car = b.carModel ? b.carModel.trim() : 'Unspecified Vehicle';
+      counts[car] = (counts[car] || 0) + 1;
+    });
+
+    const total = bookings.length || 1;
+    return Object.entries(counts)
+      .map(([model, count]) => ({
+        model,
+        count,
+        percentage: Math.round((count / total) * 100),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [bookings]);
+
+  const currentMonthStats = React.useMemo(() => {
+    const now = new Date();
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    const thisMonthBookings = bookings.filter((b) => b.date && b.date.startsWith(currentYearMonth));
+    const pendingMonth = thisMonthBookings.filter((b) => b.status === 'Pending').length;
+    const confirmedMonth = thisMonthBookings.filter((b) => b.status === 'Confirmed').length;
+    const inBayMonth = thisMonthBookings.filter((b) => b.status === 'In Bay').length;
+    const completedMonth = thisMonthBookings.filter((b) => b.status === 'Completed').length;
+
+    return {
+      monthName: currentMonthName,
+      totalThisMonth: thisMonthBookings.length,
+      bookings: thisMonthBookings,
+      pending: pendingMonth,
+      confirmed: confirmedMonth,
+      inBay: inBayMonth,
+      completed: completedMonth,
+    };
+  }, [bookings]);
 
   // Filtered Customers
   const filteredCustomers = customers.filter((c) => {
@@ -606,12 +804,6 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               </button>
             </form>
 
-            <div className="demo-hint-box">
-              <div><strong>Default Demo Credentials:</strong></div>
-              <div>Username: <code>admin</code></div>
-              <div>Password: <code>admin123</code></div>
-            </div>
-
             <button 
               type="button" 
               className="login-return-btn" 
@@ -642,10 +834,11 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           position: sticky;
           top: 0;
           left: 0;
+          right: 0;
           width: 100%;
           z-index: 1000;
           background: var(--bg-card);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
         }
         .admin-topbar {
           background: var(--bg-card);
@@ -688,6 +881,143 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           display: flex;
           align-items: center;
           gap: 12px;
+        }
+        /* Mobile Hamburger & Slide-Out Sidebar Drawer */
+        .admin-mobile-menu-btn {
+          display: none;
+          background: var(--bg-subtle);
+          border: 1px solid var(--border-subtle);
+          border-radius: 8px;
+          color: var(--text-primary);
+          width: 36px;
+          height: 36px;
+          cursor: pointer;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          padding: 0;
+          margin-right: 2px;
+        }
+        .admin-mobile-menu-btn:hover {
+          border-color: var(--yellow-dark);
+          color: var(--yellow-dark);
+        }
+        .admin-mobile-drawer-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.72);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+          z-index: 2000;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.3s ease;
+        }
+        .admin-mobile-drawer-backdrop.open {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        .admin-mobile-drawer {
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          width: 290px;
+          max-width: 85vw;
+          background: var(--bg-card);
+          border-right: 1px solid var(--border-subtle);
+          z-index: 2001;
+          box-shadow: 8px 0 32px rgba(0, 0, 0, 0.4);
+          transform: translateX(-100%);
+          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          display: flex;
+          flex-direction: column;
+        }
+        .admin-mobile-drawer.open {
+          transform: translateX(0);
+        }
+        .admin-mobile-drawer-header {
+          padding: 16px;
+          border-bottom: 1px solid var(--border-subtle);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: var(--bg-subtle);
+        }
+        .admin-mobile-drawer-close {
+          background: none;
+          border: 1px solid var(--border-subtle);
+          border-radius: 6px;
+          color: var(--text-muted);
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .admin-mobile-drawer-close:hover {
+          color: var(--text-primary);
+          border-color: var(--yellow-dark);
+        }
+        .admin-mobile-drawer-nav {
+          padding: 14px 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          flex: 1;
+          overflow-y: auto;
+        }
+        .admin-mobile-nav-link {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 8px;
+          background: transparent;
+          border: 1px solid transparent;
+          color: var(--text-secondary);
+          font-family: var(--font-heading);
+          font-size: 0.84rem;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          text-align: left;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          width: 100%;
+        }
+        .admin-mobile-nav-link:hover {
+          background: var(--bg-subtle);
+          color: var(--text-primary);
+        }
+        .admin-mobile-nav-link.active {
+          background: rgba(234, 179, 8, 0.12);
+          border-color: var(--border-yellow);
+          color: var(--yellow-dark);
+        }
+        [data-theme="dark"] .admin-mobile-nav-link.active {
+          color: var(--yellow);
+        }
+        .admin-mobile-nav-link.logout {
+          background: rgba(239, 68, 68, 0.08);
+          border-color: rgba(239, 68, 68, 0.2);
+        }
+        .admin-mobile-nav-link.logout:hover {
+          background: rgba(239, 68, 68, 0.16);
+        }
+        .admin-mobile-pill {
+          margin-left: auto;
+          font-size: 0.7rem;
+          background: var(--yellow-accent);
+          color: #060709;
+          padding: 2px 7px;
+          border-radius: 10px;
+          font-weight: 800;
+        }
+        .admin-mobile-drawer-footer {
+          padding: 14px;
+          border-top: 1px solid var(--border-subtle);
+          background: var(--bg-subtle);
         }
         .admin-tab-nav {
           background: var(--bg-subtle);
@@ -978,18 +1308,42 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           background: var(--bg-subtle);
           border: 1px solid var(--border-subtle);
           color: var(--text-secondary);
-          width: 28px;
-          height: 28px;
-          border-radius: 6px;
-          display: flex;
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          font-size: 0.82rem;
+          transition: all 0.2s ease;
           text-decoration: none;
+          box-sizing: border-box;
+          padding: 0;
         }
-        .action-icon-btn:hover { border-color: var(--border-yellow); color: var(--yellow-dark); }
-        .action-icon-btn.danger:hover { border-color: #EF4444; color: #EF4444; }
+        .action-icon-btn:hover { 
+          border-color: var(--border-yellow); 
+          color: var(--yellow-dark); 
+          background: rgba(234, 179, 8, 0.12);
+          transform: translateY(-1px);
+        }
+        .action-icon-btn.call:hover {
+          border-color: #3B82F6;
+          color: #3B82F6;
+          background: rgba(59, 130, 246, 0.12);
+          transform: translateY(-1px);
+        }
+        .action-icon-btn.whatsapp:hover {
+          border-color: #25D366;
+          color: #25D366;
+          background: rgba(37, 211, 102, 0.12);
+          transform: translateY(-1px);
+        }
+        .action-icon-btn.danger:hover { 
+          border-color: #EF4444; 
+          color: #EF4444; 
+          background: rgba(239, 68, 68, 0.12);
+          transform: translateY(-1px);
+        }
         .report-cards-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
@@ -1172,21 +1526,329 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           padding-top: 14px;
           border-top: 1px solid var(--border-subtle);
         }
+
+        /* Our Works Admin Grid & Cards */
+        .admin-works-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+          gap: 24px;
+          margin-bottom: 30px;
+        }
+        .admin-work-card {
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: var(--card-shadow);
+          display: flex;
+          flex-direction: column;
+          transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .admin-work-card:hover {
+          border-color: var(--border-yellow);
+          transform: translateY(-2px);
+        }
+        .admin-work-preview-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          height: 180px;
+          background: #0b0f19;
+          position: relative;
+        }
+        .admin-work-img-col {
+          position: relative;
+          height: 100%;
+          overflow: hidden;
+        }
+        .admin-work-img-col img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .admin-work-tag-before {
+          position: absolute;
+          bottom: 8px;
+          left: 8px;
+          background: rgba(220, 38, 38, 0.9);
+          color: #fff;
+          font-family: var(--font-heading);
+          font-size: 0.62rem;
+          font-weight: 800;
+          padding: 2px 7px;
+          border-radius: 4px;
+          letter-spacing: 0.5px;
+        }
+        .admin-work-tag-after {
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
+          background: rgba(16, 185, 129, 0.95);
+          color: #fff;
+          font-family: var(--font-heading);
+          font-size: 0.62rem;
+          font-weight: 800;
+          padding: 2px 7px;
+          border-radius: 4px;
+          letter-spacing: 0.5px;
+        }
+        .admin-work-body {
+          padding: 18px;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+        }
+        .admin-work-meta-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        .admin-work-category-badge {
+          background: rgba(234, 179, 8, 0.15);
+          color: var(--yellow-dark);
+          font-family: var(--font-heading);
+          font-size: 0.68rem;
+          font-weight: 800;
+          padding: 3px 8px;
+          border-radius: 4px;
+          border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+        .admin-work-duration-badge {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          font-weight: 600;
+        }
+        .admin-work-title {
+          font-size: 1.1rem;
+          font-weight: 800;
+          color: var(--text-primary);
+          margin: 0 0 4px 0;
+        }
+        .admin-work-service {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: var(--yellow-dark);
+          margin-bottom: 8px;
+        }
+        .admin-work-desc {
+          font-size: 0.78rem;
+          color: var(--text-muted);
+          line-height: 1.45;
+          margin-bottom: 12px;
+          flex: 1;
+        }
+        .admin-work-warranty {
+          font-size: 0.72rem;
+          color: var(--text-secondary);
+          background: var(--bg-subtle);
+          padding: 6px 10px;
+          border-radius: 6px;
+          margin-bottom: 14px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .report-highlights-grid {
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          padding: 24px;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 20px;
+          text-align: center;
+        }
+        .admin-desktop-only {
+          display: block;
+        }
+        .admin-mobile-filter-row {
+          display: none;
+        }
+        .admin-filter-select {
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid var(--border-subtle);
+          background: var(--bg-subtle);
+          color: var(--text-primary);
+          font-size: 0.82rem;
+          outline: none;
+          cursor: pointer;
+        }
+        .admin-logout-tab-btn {
+          margin-left: auto;
+          color: #EF4444 !important;
+          border-color: rgba(239, 68, 68, 0.25) !important;
+        }
+        .admin-logout-tab-btn:hover {
+          background: rgba(239, 68, 68, 0.12) !important;
+          color: #DC2626 !important;
+        }
         @media (max-width: 1024px) {
           .metrics-grid { grid-template-columns: repeat(3, 1fr); }
           .live-bays-grid { grid-template-columns: repeat(2, 1fr); }
           .report-cards-grid { grid-template-columns: 1fr; }
         }
+        @media (max-width: 768px) {
+          .admin-mobile-menu-btn {
+            display: inline-flex !important;
+          }
+          .admin-tab-nav {
+            display: none !important;
+          }
+          .admin-fixed-header-wrapper {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 1000 !important;
+            background: var(--bg-card) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+          }
+          .report-highlights-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px 12px;
+            padding: 16px 12px;
+          }
+          .admin-desktop-only {
+            display: none !important;
+          }
+          .admin-mobile-filter-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+          }
+          .admin-filter-select {
+            width: 100%;
+            font-size: 0.78rem;
+            padding: 8px 8px;
+          }
+        }
+        @media (min-width: 769px) {
+          .admin-mobile-menu-btn,
+          .admin-mobile-drawer,
+          .admin-mobile-drawer-backdrop {
+            display: none !important;
+          }
+          .admin-tab-nav {
+            display: flex !important;
+          }
+        }
         @media (max-width: 640px) {
           .metrics-grid { grid-template-columns: repeat(2, 1fr); }
           .live-bays-grid { grid-template-columns: 1fr; }
-          .admin-topbar { padding: 12px 16px; flex-direction: column; gap: 10px; align-items: flex-start; }
-          .admin-tab-nav { padding: 0 12px; }
-          .admin-body { padding: 16px 12px; }
+          .admin-topbar { padding: 10px 14px; flex-direction: row; gap: 8px; align-items: center; }
+          .admin-tab-nav { padding: 0 10px; }
+          .admin-body { padding: 14px 10px; }
+          .admin-logout-tab-btn { margin-left: 0; }
         }
       `}</style>
 
       <div className="admin-console-root">
+        {/* Mobile Slide-Out Sidebar Drawer (Mobile Only) */}
+        <div 
+          className={`admin-mobile-drawer-backdrop ${isMobileSidebarOpen ? 'open' : ''}`} 
+          onClick={() => setIsMobileSidebarOpen(false)} 
+        />
+        <aside className={`admin-mobile-drawer ${isMobileSidebarOpen ? 'open' : ''}`} aria-label="Mobile Navigation Sidebar">
+          <div className="admin-mobile-drawer-header">
+            <div className="admin-top-brand">
+              <div className="admin-brand-badge">CC</div>
+              <div className="admin-brand-text">
+                <div style={{ fontWeight: 900, fontSize: '0.95rem', color: 'var(--text-primary)', letterSpacing: '0.5px' }}>{siteSettings.siteName.toUpperCase()} ADMIN</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Command Center Menu</div>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              className="admin-mobile-drawer-close"
+              aria-label="Close Menu"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            >
+              <CloseIcon size={18} />
+            </button>
+          </div>
+
+          <div className="admin-mobile-drawer-nav">
+            <button 
+              type="button" 
+              className={`admin-mobile-nav-link ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => handleTabSelect('dashboard')}
+            >
+              <BarChartIcon size={18} />
+              <span>DASHBOARD</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`admin-mobile-nav-link ${activeTab === 'appointments' ? 'active' : ''}`}
+              onClick={() => handleTabSelect('appointments')}
+            >
+              <CalendarIcon size={18} />
+              <span>APPOINTMENTS</span>
+              <span className="admin-mobile-pill">{totalCount}</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`admin-mobile-nav-link ${activeTab === 'customers' ? 'active' : ''}`}
+              onClick={() => handleTabSelect('customers')}
+            >
+              <UsersIcon size={18} />
+              <span>CUSTOMERS</span>
+              <span className="admin-mobile-pill" style={{ background: 'var(--bg-card)' }}>{customers.length}</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`admin-mobile-nav-link ${activeTab === 'services' ? 'active' : ''}`}
+              onClick={() => handleTabSelect('services')}
+            >
+              <ServicesWorksIcon size={18} />
+              <span>SERVICES & WORKS</span>
+              <span className="admin-mobile-pill">{servicesList.length + worksList.length}</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`admin-mobile-nav-link ${activeTab === 'reports' ? 'active' : ''}`}
+              onClick={() => handleTabSelect('reports')}
+            >
+              <TrendingUpIcon size={18} />
+              <span>REPORTS</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`admin-mobile-nav-link ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => handleTabSelect('settings')}
+            >
+              <GearSettingIcon size={18} />
+              <span>SETTINGS</span>
+            </button>
+          </div>
+
+          <div className="admin-mobile-drawer-footer">
+            <button 
+              type="button" 
+              className="btn-ghost" 
+              style={{ width: '100%', justifyContent: 'center', marginBottom: '10px', padding: '9px', fontSize: '0.8rem' }}
+              onClick={() => { setIsMobileSidebarOpen(false); onNavigate('home'); }}
+            >
+              <EyeIcon size={14} />
+              <span>VIEW PUBLIC SITE</span>
+            </button>
+
+            <button 
+              type="button" 
+              className="admin-mobile-nav-link logout" 
+              onClick={() => { setIsMobileSidebarOpen(false); handleLogout(); }}
+            >
+              <LogoutIcon size={18} color="#EF4444" />
+              <span style={{ color: '#EF4444', fontWeight: 800 }}>SIGN OUT / LOGOUT</span>
+            </button>
+          </div>
+        </aside>
+
         {/* Fixed Header & Navigation Tabs Wrapper (Stays pinned at top on scroll) */}
         <div className="admin-fixed-header-wrapper">
           {/* Top Header */}
@@ -1195,36 +1857,34 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               <div className="admin-brand-badge">CC</div>
               <div className="admin-brand-text">
                 <h2>{siteSettings.siteName.toUpperCase()} ADMIN</h2>
-                <span>Master Bay Detailing & Scheduling Command Center</span>
+                
               </div>
             </div>
 
             <div className="admin-top-controls">
               <button 
                 type="button" 
-                className="btn-ghost"
-                style={{ fontSize: '0.8rem', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                className="btn-ghost admin-desktop-only"
+                style={{ fontSize: '0.72rem', padding: '5px 10px', alignItems: 'center', gap: '5px', borderRadius: '6px' }}
                 onClick={() => onNavigate('home')}
                 title="View Public Site"
               >
-                <EyeIcon size={16} />
-                <span>VIEW PUBLIC SITE</span>
+                <EyeIcon size={14} />
+                <span>VIEW SITE</span>
               </button>
 
               <button 
                 type="button" 
-                className="btn-automotive-cta"
-                style={{ fontSize: '0.8rem', padding: '8px 16px', background: '#EF4444', color: '#FFF', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                onClick={handleLogout}
-                title="Sign Out"
+                className="admin-mobile-menu-btn" 
+                aria-label="Toggle Navigation Menu"
+                onClick={() => setIsMobileSidebarOpen(true)}
               >
-                <span>LOGOUT</span>
-                <LogoutIcon size={16} />
+                <MenuIcon size={20} />
               </button>
             </div>
           </header>
 
-          {/* Navigation Tabs: Dashboard, Appointments, Customers, Services, Reports, Settings */}
+          {/* Navigation Tabs: Dashboard, Appointments, Customers, Services, Reports, Settings, Logout */}
           <nav className="admin-tab-nav" aria-label="Admin Navigation Tabs">
             <button 
               type="button" 
@@ -1264,10 +1924,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               className={`admin-tab-btn ${activeTab === 'services' ? 'active' : ''}`}
               onClick={() => setActiveTab('services')}
             >
-              <SparkleIcon size={16} />
-              <span>SERVICES</span>
+              <ServicesWorksIcon size={16} />
+              <span>SERVICES & WORKS</span>
               <span style={{ fontSize: '0.72rem', background: 'var(--yellow-accent)', color: '#060709', padding: '1px 6px', borderRadius: '10px' }}>
-                {servicesList.length}
+                {servicesList.length + worksList.length}
               </span>
             </button>
 
@@ -1287,6 +1947,16 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             >
               <GearSettingIcon size={16} />
               <span>SETTINGS</span>
+            </button>
+
+            <button 
+              type="button" 
+              className="admin-tab-btn admin-logout-tab-btn"
+              onClick={handleLogout}
+              title="Sign Out of Admin Console"
+            >
+              <LogoutIcon size={16} />
+              <span>LOGOUT</span>
             </button>
           </nav>
         </div>
@@ -1334,58 +2004,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 </div>
               </div>
 
-              {/* Live Master Bay Status */}
-              <div style={{ marginBottom: '12px', fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
-                🔴 LIVE STUDIO BAY STATUS (REAL-TIME CURE & DETAILING PROGRESS)
-              </div>
-              <div className="live-bays-grid">
-                <div className="bay-card">
-                  <div className="bay-header">
-                    <span className="bay-num">BAY 01 • CHENNAI</span>
-                    <span className="bay-status-chip chip-occupied">ACTIVE CURE</span>
-                  </div>
-                  <div className="bay-vehicle">Porsche 911 GT3 RS</div>
-                  <div className="bay-service">10H Ceramic Coating • Layer 2</div>
-                  <div className="bay-progress-bar"><div className="bay-progress-fill" style={{ width: '85%' }}></div></div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Infrared Curing: 85% Complete</span>
-                </div>
-
-                <div className="bay-card">
-                  <div className="bay-header">
-                    <span className="bay-num">BAY 02 • CHENNAI</span>
-                    <span className="bay-status-chip chip-occupied">PPF WRAP</span>
-                  </div>
-                  <div className="bay-vehicle">McLaren 720S Spider</div>
-                  <div className="bay-service">Full Optical Armor TPU PPF</div>
-                  <div className="bay-progress-bar"><div className="bay-progress-fill" style={{ width: '50%' }}></div></div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Hood & Rockers Done: 50%</span>
-                </div>
-
-                <div className="bay-card">
-                  <div className="bay-header">
-                    <span className="bay-num">BAY 03 • BANGALORE</span>
-                    <span className="bay-status-chip chip-occupied">INTERIOR SPA</span>
-                  </div>
-                  <div className="bay-vehicle">Mercedes-AMG G63</div>
-                  <div className="bay-service">Swissvax Leather Balm & Ozone</div>
-                  <div className="bay-progress-bar"><div className="bay-progress-fill" style={{ width: '70%' }}></div></div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Ozone Purge Complete: 70%</span>
-                </div>
-
-                <div className="bay-card">
-                  <div className="bay-header">
-                    <span className="bay-num">BAY 04 • COIMBATORE</span>
-                    <span className="bay-status-chip chip-ready">READY & SANITIZED</span>
-                  </div>
-                  <div className="bay-vehicle">Open Clean Room</div>
-                  <div className="bay-service">Awaiting Next Arrival</div>
-                  <div className="bay-progress-bar"><div className="bay-progress-fill" style={{ width: '0%', background: '#3B82F6' }}></div></div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Ready for BMW M4 Competition</span>
-                </div>
-              </div>
-
               {/* Recent Incoming Bookings Table on Dashboard */}
-              <div style={{ marginTop: '28px', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ marginTop: '20px', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                 <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
                   ⚡ RECENT WEBSITE BOOKINGS & APPOINTMENTS (LIVE FEED)
                 </span>
@@ -1409,19 +2029,27 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {bookings.slice(0, 5).map((b) => (
+                      {bookings.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
+                            No appointments booked yet. Real bookings submitted from the website will automatically appear here.
+                          </td>
+                        </tr>
+                      ) : (
+                        bookings.slice(0, 5).map((b) => (
                         <tr key={b.id}>
                           <td>
-                            <span className="booking-id-tag">{b.id}</span>
-                            {b.status === 'Pending' && (
+                            <span className="booking-id-tag">#{b.id}</span>
+                            {(b.isNew || b.status === 'Pending') && (
                               <span style={{
                                 marginLeft: '6px',
                                 background: '#EF4444',
                                 color: '#FFF',
-                                fontSize: '0.6rem',
-                                padding: '2px 5px',
+                                fontSize: '0.62rem',
+                                padding: '2px 6px',
                                 borderRadius: '4px',
-                                fontWeight: 800
+                                fontWeight: 800,
+                                letterSpacing: '0.5px'
                               }}>NEW</span>
                             )}
                           </td>
@@ -1457,22 +2085,24 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                 title="View Notes & Inspection"
                                 onClick={() => setSelectedBooking(b)}
                               >
-                                📝
+                                <FileTextIcon size={14} color="var(--yellow-dark)" />
                               </button>
-                              <a href={`tel:${b.phone}`} className="action-icon-btn" title="Call Customer">📞</a>
+                              <a href={`tel:${b.phone}`} className="action-icon-btn call" title="Call Customer">
+                                <PhoneCallIcon size={14} color="#3B82F6" />
+                              </a>
                               <a 
                                 href={`https://wa.me/${b.phone.replace(/[^0-9]/g, '')}`} 
                                 target="_blank" 
                                 rel="noreferrer" 
-                                className="action-icon-btn" 
+                                className="action-icon-btn whatsapp" 
                                 title="WhatsApp"
                               >
-                                💬
+                                <WhatsAppIcon size={14} color="#25D366" />
                               </a>
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>
@@ -1481,13 +2111,13 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               {/* Quick Jump Buttons */}
               <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                 <button type="button" className="btn-ghost" onClick={() => setActiveTab('appointments')}>
-                  <span>VIEW ALL APPOINTMENTS ({totalCount}) →</span>
+                  <span>VIEW ALL APPOINTMENTS ({totalCount})</span>
                 </button>
                 <button type="button" className="btn-ghost" onClick={() => setActiveTab('customers')}>
-                  <span>MANAGE CLIENT DIRECTORY ({customers.length}) →</span>
+                  <span>MANAGE CLIENT DIRECTORY ({customers.length})</span>
                 </button>
                 <button type="button" className="btn-ghost" onClick={() => setActiveTab('reports')}>
-                  <span>VIEW REVENUE REPORTS →</span>
+                  <span>VIEW REPORTS</span>
                 </button>
               </div>
             </div>
@@ -1533,7 +2163,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                   />
                 </div>
 
-                <div className="status-tabs">
+                {/* Desktop Status Tabs (hidden on mobile) */}
+                <div className="status-tabs admin-desktop-only">
                   {['ALL', 'Pending', 'Confirmed', 'In Bay', 'Completed', 'Cancelled'].map((tab) => (
                     <button
                       key={tab}
@@ -1546,9 +2177,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                   ))}
                 </div>
 
-                <div>
+                {/* Desktop Studio Dropdown (hidden on mobile) */}
+                <div className="admin-desktop-only">
                   <select 
-                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', background: 'var(--bg-subtle)', color: 'var(--text-primary)', fontSize: '0.82rem' }}
+                    className="admin-filter-select"
                     value={studioFilter}
                     onChange={(e) => setStudioFilter(e.target.value)}
                   >
@@ -1556,6 +2188,33 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     <option value="Chennai">Chennai Studio</option>
                     <option value="Bangalore">Bangalore Studio</option>
                     <option value="Coimbatore">Coimbatore Studio</option>
+                  </select>
+                </div>
+
+                {/* Mobile Filter Controls (Clean 2-Column Row for Status & Studio) */}
+                <div className="admin-mobile-filter-row">
+                  <select 
+                    className="admin-filter-select"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Statuses ({bookings.length})</option>
+                    <option value="Pending">🟡 Pending ({bookings.filter(b => b.status === 'Pending').length})</option>
+                    <option value="Confirmed">🔵 Confirmed ({bookings.filter(b => b.status === 'Confirmed').length})</option>
+                    <option value="In Bay">🟣 In Bay ({bookings.filter(b => b.status === 'In Bay').length})</option>
+                    <option value="Completed">🟢 Completed ({bookings.filter(b => b.status === 'Completed').length})</option>
+                    <option value="Cancelled">🔴 Cancelled ({bookings.filter(b => b.status === 'Cancelled').length})</option>
+                  </select>
+
+                  <select 
+                    className="admin-filter-select"
+                    value={studioFilter}
+                    onChange={(e) => setStudioFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Studios</option>
+                    <option value="Chennai">Chennai Hub</option>
+                    <option value="Bangalore">Bangalore Hub</option>
+                    <option value="Coimbatore">Coimbatore Hub</option>
                   </select>
                 </div>
               </div>
@@ -1583,9 +2242,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                           </td>
                         </tr>
                       ) : (
-                        filteredBookings.map((b) => (
+                        paginatedBookings.map((b) => (
                           <tr key={b.id}>
-                            <td><span className="booking-id-tag">{b.id}</span></td>
+                            <td>
+                              <span className="booking-id-tag">#{b.id}</span>
+                              {(b.isNew || b.status === 'Pending') && (
+                                <span style={{
+                                  marginLeft: '6px',
+                                  background: '#EF4444',
+                                  color: '#FFF',
+                                  fontSize: '0.62rem',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: 800,
+                                  letterSpacing: '0.5px'
+                                }}>NEW</span>
+                              )}
+                            </td>
                             <td>
                               <strong style={{ color: 'var(--text-primary)', display: 'block' }}>{b.customerName}</strong>
                               <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{b.phone}</span>
@@ -1625,17 +2298,19 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                   title="View Notes & Inspection"
                                   onClick={() => setSelectedBooking(b)}
                                 >
-                                  📝
+                                  <FileTextIcon size={14} color="var(--yellow-dark)" />
                                 </button>
-                                <a href={`tel:${b.phone}`} className="action-icon-btn" title="Call Customer">📞</a>
+                                <a href={`tel:${b.phone}`} className="action-icon-btn call" title="Call Customer">
+                                  <PhoneCallIcon size={14} color="#3B82F6" />
+                                </a>
                                 <a 
                                   href={`https://wa.me/${b.phone.replace(/[^0-9]/g, '')}`} 
                                   target="_blank" 
                                   rel="noreferrer" 
-                                  className="action-icon-btn" 
+                                  className="action-icon-btn whatsapp" 
                                   title="WhatsApp"
                                 >
-                                  💬
+                                  <WhatsAppIcon size={14} color="#25D366" />
                                 </a>
                                 <button 
                                   type="button" 
@@ -1643,7 +2318,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                   title="Delete Appointment"
                                   onClick={() => handleDeleteBooking(b.id)}
                                 >
-                                  🗑️
+                                  <TrashBinIcon size={14} color="#EF4444" />
                                 </button>
                               </div>
                             </td>
@@ -1653,6 +2328,65 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Appointments Pagination Controls (10 Per Page) */}
+                {filteredBookings.length > APPOINTMENTS_PER_PAGE && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 18px',
+                    borderTop: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-subtle)',
+                    flexWrap: 'wrap',
+                    gap: '10px'
+                  }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Showing <strong>{(appointmentPage - 1) * APPOINTMENTS_PER_PAGE + 1}</strong> to <strong>{Math.min(appointmentPage * APPOINTMENTS_PER_PAGE, filteredBookings.length)}</strong> of <strong>{filteredBookings.length}</strong> appointments
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        style={{ padding: '6px 12px', fontSize: '0.78rem', cursor: appointmentPage === 1 ? 'not-allowed' : 'pointer', opacity: appointmentPage === 1 ? 0.45 : 1 }}
+                        disabled={appointmentPage === 1}
+                        onClick={() => setAppointmentPage(p => Math.max(1, p - 1))}
+                      >
+                        ← PREV
+                      </button>
+                      {Array.from({ length: totalAppointmentPages }, (_, idx) => idx + 1).map((pg) => (
+                        <button
+                          key={pg}
+                          type="button"
+                          onClick={() => setAppointmentPage(pg)}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '6px',
+                            fontSize: '0.8rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            border: pg === appointmentPage ? '1px solid var(--yellow-dark)' : '1px solid var(--border-subtle)',
+                            background: pg === appointmentPage ? 'var(--yellow-accent)' : 'var(--bg-card)',
+                            color: pg === appointmentPage ? '#060709' : 'var(--text-primary)',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {pg}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        style={{ padding: '6px 12px', fontSize: '0.78rem', cursor: appointmentPage === totalAppointmentPages ? 'not-allowed' : 'pointer', opacity: appointmentPage === totalAppointmentPages ? 0.45 : 1 }}
+                        disabled={appointmentPage === totalAppointmentPages}
+                        onClick={() => setAppointmentPage(p => Math.min(totalAppointmentPages, p + 1))}
+                      >
+                        NEXT →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1731,9 +2465,26 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             <td style={{ fontSize: '0.8rem' }}>{c.preferredService}</td>
                             <td>
                               <div className="action-btns-group">
-                                <a href={`tel:${c.phone}`} className="action-icon-btn" title="Call">📞</a>
-                                <a href={`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="action-icon-btn" title="WhatsApp">💬</a>
-                                <button type="button" className="action-icon-btn danger" title="Delete" onClick={() => handleDeleteCustomer(c.id)}>🗑️</button>
+                                <a href={`tel:${c.phone}`} className="action-icon-btn call" title="Call Client">
+                                  <PhoneCallIcon size={14} color="#3B82F6" />
+                                </a>
+                                <a 
+                                  href={`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}`} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="action-icon-btn whatsapp" 
+                                  title="WhatsApp"
+                                >
+                                  <WhatsAppIcon size={14} color="#25D366" />
+                                </a>
+                                <button 
+                                  type="button" 
+                                  className="action-icon-btn danger" 
+                                  title="Delete Client" 
+                                  onClick={() => handleDeleteCustomer(c.id)}
+                                >
+                                  <TrashBinIcon size={14} color="#EF4444" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1747,86 +2498,247 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           )}
 
           {/* ===============================================================
-              TAB: SERVICES (DYNAMIC CATALOG MANAGEMENT)
+              TAB: SERVICES & OUR WORKS (DYNAMIC CATALOG MANAGEMENT)
               =============================================================== */}
           {activeTab === 'services' && (
             <div>
-              <div className="admin-sec-title">
-                <div>
-                  <span>SERVICES & DETAILING CATALOG</span>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-muted)', textTransform: 'none' }}>
-                    Manage detailing treatments displayed on the website. Adding or updating services dynamically updates the Services division on the website.
-                  </p>
-                </div>
+              {/* Sub Navigation Bar for Services vs Our Works */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px', flexWrap: 'nowrap', overflowX: 'auto' }}>
                 <button 
                   type="button" 
-                  className="btn-automotive-cta"
-                  style={{ fontSize: '0.82rem', padding: '8px 16px' }}
-                  onClick={handleOpenAddService}
+                  onClick={() => setServicesSubTab('catalog')}
+                  style={{ 
+                    padding: '7px 14px', 
+                    borderRadius: '8px', 
+                    fontWeight: 700, 
+                    fontSize: '0.8rem', 
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: '1px solid',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s',
+                    background: servicesSubTab === 'catalog' ? 'var(--yellow-accent)' : 'var(--bg-subtle)',
+                    color: servicesSubTab === 'catalog' ? '#060709' : 'var(--text-secondary)',
+                    borderColor: servicesSubTab === 'catalog' ? 'var(--yellow-accent)' : 'var(--border-subtle)'
+                  }}
                 >
-                  <span>➕ ADD NEW SERVICE</span>
+                  <span>⚡ SERVICES CATALOG</span>
+                  <span style={{ 
+                    fontSize: '0.7rem', 
+                    padding: '1px 6px', 
+                    borderRadius: '10px',
+                    background: servicesSubTab === 'catalog' ? 'rgba(0,0,0,0.18)' : 'var(--bg-card)',
+                    color: servicesSubTab === 'catalog' ? '#060709' : 'var(--text-primary)'
+                  }}>
+                    {servicesList.length}
+                  </span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={() => setServicesSubTab('works')}
+                  style={{ 
+                    padding: '7px 14px', 
+                    borderRadius: '8px', 
+                    fontWeight: 700, 
+                    fontSize: '0.8rem', 
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: '1px solid',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s',
+                    background: servicesSubTab === 'works' ? 'var(--yellow-accent)' : 'var(--bg-subtle)',
+                    color: servicesSubTab === 'works' ? '#060709' : 'var(--text-secondary)',
+                    borderColor: servicesSubTab === 'works' ? 'var(--yellow-accent)' : 'var(--border-subtle)'
+                  }}
+                >
+                  <span>🏆 OUR WORKS</span>
+                  <span style={{ 
+                    fontSize: '0.7rem', 
+                    padding: '1px 6px', 
+                    borderRadius: '10px',
+                    background: servicesSubTab === 'works' ? 'rgba(0,0,0,0.18)' : 'var(--bg-card)',
+                    color: servicesSubTab === 'works' ? '#060709' : 'var(--text-primary)'
+                  }}>
+                    {worksList.length}
+                  </span>
                 </button>
               </div>
 
-              {/* Service Cards Grid */}
-              <div className="admin-services-grid">
-                {servicesList.map((service) => (
-                  <div key={service.id} className="admin-service-card">
-                    <div className="admin-service-thumb-wrap">
-                      <img 
-                        src={resolveServiceImage(service.thumbnail)} 
-                        alt={service.name} 
-                        className="admin-service-thumb"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/assets/detail_after.jpg';
-                        }}
-                      />
-                      <span className="admin-service-badge">{service.tag}</span>
+              {/* Sub-Tab 1: Services Catalog */}
+              {servicesSubTab === 'catalog' && (
+                <div>
+                  <div className="admin-sec-title">
+                    <div>
+                      <span>SERVICES & DETAILING CATALOG</span>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-muted)', textTransform: 'none' }}>
+                        Manage detailing treatments displayed on the website. Adding or updating services dynamically updates the Services division on the website.
+                      </p>
                     </div>
-
-                    <div className="admin-service-body">
-                      <h4 className="admin-service-name">{service.name}</h4>
-                      <p className="admin-service-desc">{service.shortDesc}</p>
-
-                      <ul className="admin-service-features">
-                        {(service.features || []).map((feat, idx) => (
-                          <li key={idx}>
-                            <span>✦</span>
-                            <div>
-                              <strong>{feat.title}:</strong> {feat.desc}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-
-                      {service.addon && (
-                        <div className="admin-service-addon">
-                          ✓ {service.addon}
-                        </div>
-                      )}
-
-                      <div className="admin-service-actions">
-                        <button 
-                          type="button" 
-                          className="btn-ghost" 
-                          style={{ flex: 1, padding: '8px 12px', fontSize: '0.78rem' }}
-                          onClick={() => handleOpenEditService(service)}
-                        >
-                          ✏️ Edit Service
-                        </button>
-                        <button 
-                          type="button" 
-                          className="btn-ghost" 
-                          style={{ color: '#EF4444', borderColor: 'rgba(239, 68, 68, 0.4)', padding: '8px 14px', fontSize: '0.78rem' }}
-                          onClick={() => handleDeleteService(service.id, service.name)}
-                        >
-                          🗑️ Delete
-                        </button>
-                      </div>
-                    </div>
+                    <button 
+                      type="button" 
+                      className="btn-automotive-cta"
+                      style={{ fontSize: '0.82rem', padding: '8px 16px' }}
+                      onClick={handleOpenAddService}
+                    >
+                      <span>➕ ADD NEW SERVICE</span>
+                    </button>
                   </div>
-                ))}
-              </div>
+
+                  {/* Service Cards Grid */}
+                  <div className="admin-services-grid">
+                    {servicesList.map((service) => (
+                      <div key={service.id} className="admin-service-card">
+                        <div className="admin-service-thumb-wrap">
+                          <img 
+                            src={resolveServiceImage(service.thumbnail)} 
+                            alt={service.name} 
+                            className="admin-service-thumb"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/assets/detail_after.jpg';
+                            }}
+                          />
+                          <span className="admin-service-badge">{service.tag}</span>
+                        </div>
+
+                        <div className="admin-service-body">
+                          <h4 className="admin-service-name">{service.name}</h4>
+                          <p className="admin-service-desc">{service.shortDesc}</p>
+
+                          <ul className="admin-service-features">
+                            {(service.features || []).map((feat, idx) => (
+                              <li key={idx}>
+                                <span>✦</span>
+                                <div>
+                                  <strong>{feat.title}:</strong> {feat.desc}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+
+                          {service.addon && (
+                            <div className="admin-service-addon">
+                              ✓ {service.addon}
+                            </div>
+                          )}
+
+                          <div className="admin-service-actions">
+                            <button 
+                              type="button" 
+                              className="btn-ghost" 
+                              style={{ flex: 1, padding: '8px 12px', fontSize: '0.78rem' }}
+                              onClick={() => handleOpenEditService(service)}
+                            >
+                              ✏️ Edit Service
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn-ghost" 
+                              style={{ color: '#EF4444', borderColor: 'rgba(239, 68, 68, 0.4)', padding: '8px 14px', fontSize: '0.78rem' }}
+                              onClick={() => handleDeleteService(service.id, service.name)}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Tab 2: Our Works & Showroom Deliveries */}
+              {servicesSubTab === 'works' && (
+                <div>
+                  <div className="admin-sec-title">
+                    <div>
+                      <span>RECENT TRANSFORMATIONS & DELIVERIES</span>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-muted)', textTransform: 'none' }}>
+                        Manage vehicle transformations shown under "Our Works & Showroom Delivery" on the website. Each vehicle has Before & After showcase images viewable in the interactive comparison gallery.
+                      </p>
+                    </div>
+                    <button 
+                      type="button" 
+                      className="btn-automotive-cta"
+                      style={{ fontSize: '0.82rem', padding: '8px 16px' }}
+                      onClick={handleOpenAddWork}
+                    >
+                      <span>➕ ADD NEW TRANSFORMATION</span>
+                    </button>
+                  </div>
+
+                  {/* Works Grid */}
+                  <div className="admin-works-grid">
+                    {worksList.map((work) => (
+                      <div key={work.id} className="admin-work-card">
+                        <div className="admin-work-preview-grid">
+                          <div className="admin-work-img-col">
+                            <img 
+                              src={resolveWorkImage(work.beforeImg, '/assets/detail_before.jpg')} 
+                              alt={`${work.title} Before`} 
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/assets/detail_before.jpg';
+                              }}
+                            />
+                            <span className="admin-work-tag-before">BEFORE</span>
+                          </div>
+                          <div className="admin-work-img-col">
+                            <img 
+                              src={resolveWorkImage(work.afterImg || work.img, '/assets/detail_after.jpg')} 
+                              alt={`${work.title} After`} 
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/assets/detail_after.jpg';
+                              }}
+                            />
+                            <span className="admin-work-tag-after">AFTER</span>
+                          </div>
+                        </div>
+
+                        <div className="admin-work-body">
+                          <div className="admin-work-meta-row">
+                            <span className="admin-work-category-badge">{work.category}</span>
+                            <span className="admin-work-duration-badge">⏱ {work.duration}</span>
+                          </div>
+
+                          <h4 className="admin-work-title">{work.title}</h4>
+                          <div className="admin-work-service">✨ {work.service}</div>
+                          <p className="admin-work-desc">{work.description}</p>
+
+                          {work.warranty && (
+                            <div className="admin-work-warranty">
+                              <span>🛡️</span>
+                              <span><strong>Warranty:</strong> {work.warranty}</span>
+                            </div>
+                          )}
+
+                          <div className="admin-service-actions">
+                            <button 
+                              type="button" 
+                              className="btn-ghost" 
+                              style={{ flex: 1, padding: '8px 12px', fontSize: '0.78rem' }}
+                              onClick={() => handleOpenEditWork(work)}
+                            >
+                              ✏️ Edit Details
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn-ghost" 
+                              style={{ color: '#EF4444', borderColor: 'rgba(239, 68, 68, 0.4)', padding: '8px 14px', fontSize: '0.78rem' }}
+                              onClick={() => handleDeleteWork(work.id, work.title)}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1849,104 +2761,102 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
               {/* Report Summary Cards */}
               <div className="report-cards-grid">
-                {/* Box 1: Service Breakdown */}
+                {/* Box 1: Popular Detailing Services (Dynamic from Bookings, No Amount) */}
                 <div className="report-box">
                   <h3 className="report-box-title">🏆 Popular Detailing Services</h3>
-                  
-                  <div className="stat-bar-item">
-                    <div className="stat-bar-labels">
-                      <span>Ceramic & Graphene Coating</span>
-                      <span>38% (9 Vehicles)</span>
+                  {serviceStats.length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                      No detailing appointments recorded yet.
                     </div>
-                    <div className="stat-bar-track">
-                      <div className="stat-bar-fill" style={{ width: '38%' }}></div>
-                    </div>
-                  </div>
-
-                  <div className="stat-bar-item">
-                    <div className="stat-bar-labels">
-                      <span>Full Body Armor PPF</span>
-                      <span>32% (7 Vehicles)</span>
-                    </div>
-                    <div className="stat-bar-track">
-                      <div className="stat-bar-fill" style={{ width: '32%' }}></div>
-                    </div>
-                  </div>
-
-                  <div className="stat-bar-item">
-                    <div className="stat-bar-labels">
-                      <span>Stage 2/3 Paint Correction</span>
-                      <span>18% (4 Vehicles)</span>
-                    </div>
-                    <div className="stat-bar-track">
-                      <div className="stat-bar-fill" style={{ width: '18%' }}></div>
-                    </div>
-                  </div>
-
-                  <div className="stat-bar-item">
-                    <div className="stat-bar-labels">
-                      <span>Interior Sanctuary Spa</span>
-                      <span>12% (3 Vehicles)</span>
-                    </div>
-                    <div className="stat-bar-track">
-                      <div className="stat-bar-fill" style={{ width: '12%' }}></div>
-                    </div>
-                  </div>
+                  ) : (
+                    serviceStats.map((item, idx) => (
+                      <div key={idx} className="stat-bar-item">
+                        <div className="stat-bar-labels">
+                          <span>{item.name}</span>
+                          <span>{item.percentage}% • {item.count} {item.count === 1 ? 'Booking' : 'Bookings'}</span>
+                        </div>
+                        <div className="stat-bar-track">
+                          <div className="stat-bar-fill" style={{ width: `${Math.max(item.percentage, 6)}%` }}></div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
 
-                {/* Box 2: Regional Studio Volume */}
+                {/* Box 2: Vehicle Profile & Make Distribution (Top 5 Vehicles Ranked High to Low from Bookings) */}
                 <div className="report-box">
-                  <h3 className="report-box-title">📍 Regional Studio Volume</h3>
-
-                  <div className="stat-bar-item">
-                    <div className="stat-bar-labels">
-                      <span>Chennai Studio (Guindy Hub)</span>
-                      <span>48% Volume</span>
+                  <h3 className="report-box-title">🏎️ Vehicle Profile & Make Distribution (Top 5)</h3>
+                  {vehicleStats.length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                      No vehicle bookings recorded yet.
                     </div>
-                    <div className="stat-bar-track">
-                      <div className="stat-bar-fill" style={{ width: '48%', background: '#10B981' }}></div>
+                  ) : (
+                    vehicleStats.slice(0, 5).map((v, idx) => {
+                      const colors = ['#F59E0B', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899'];
+                      const barColor = colors[idx % colors.length];
+                      return (
+                        <div key={idx} className="stat-bar-item">
+                          <div className="stat-bar-labels">
+                            <span><strong>#{idx + 1}</strong> {v.model}</span>
+                            <span style={{ fontWeight: 700 }}>{v.percentage}% ({v.count} {v.count === 1 ? 'Booking' : 'Bookings'})</span>
+                          </div>
+                          <div className="stat-bar-track">
+                            <div className="stat-bar-fill" style={{ width: `${Math.max(v.percentage, 6)}%`, background: barColor }}></div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Box 3: Current Month Detailing Appointments Overview */}
+                <div className="report-box" style={{ gridColumn: '1 / -1' }}>
+                  <h3 className="report-box-title">📅 Current Month Appointments ({currentMonthStats.monthName})</h3>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '16px', marginTop: '8px' }}>
+                    <div style={{ background: 'var(--bg-subtle)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>THIS MONTH TOTAL</div>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--yellow-dark)' }}>{currentMonthStats.totalThisMonth}</div>
+                    </div>
+                    <div style={{ background: 'var(--bg-subtle)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>PENDING</div>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#F59E0B' }}>{currentMonthStats.pending}</div>
+                    </div>
+                    <div style={{ background: 'var(--bg-subtle)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>CONFIRMED</div>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#3B82F6' }}>{currentMonthStats.confirmed}</div>
+                    </div>
+                    <div style={{ background: 'var(--bg-subtle)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>IN MASTER BAY</div>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#8B5CF6' }}>{currentMonthStats.inBay}</div>
+                    </div>
+                    <div style={{ background: 'var(--bg-subtle)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>COMPLETED</div>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10B981' }}>{currentMonthStats.completed}</div>
                     </div>
                   </div>
 
-                  <div className="stat-bar-item">
-                    <div className="stat-bar-labels">
-                      <span>Bangalore Studio (Indiranagar Hub)</span>
-                      <span>35% Volume</span>
+                  {currentMonthStats.bookings.length === 0 ? (
+                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      No detailing appointments recorded yet for {currentMonthStats.monthName}.
                     </div>
-                    <div className="stat-bar-track">
-                      <div className="stat-bar-fill" style={{ width: '35%', background: '#3B82F6' }}></div>
+                  ) : (
+                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      {currentMonthStats.bookings.map((b) => (
+                        <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', fontSize: '0.8rem' }}>
+                          <div>
+                            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{b.customerName}</span>
+                            <span style={{ color: 'var(--text-muted)', marginLeft: '10px' }}>{b.carModel}</span>
+                            <span style={{ color: 'var(--yellow-dark)', marginLeft: '10px', fontSize: '0.74rem' }}>{b.service}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{b.date}</span>
+                            <span className={`status-badge status-${b.status.toLowerCase().replace(/\s+/g, '-')}`} style={{ fontSize: '0.68rem', padding: '3px 8px' }}>{b.status}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-
-                  <div className="stat-bar-item">
-                    <div className="stat-bar-labels">
-                      <span>Coimbatore Studio (Peelamedu Hub)</span>
-                      <span>17% Volume</span>
-                    </div>
-                    <div className="stat-bar-track">
-                      <div className="stat-bar-fill" style={{ width: '17%', background: '#F59E0B' }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quality & Revenue Highlights */}
-              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', textAlign: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>ESTIMATED REVENUE</div>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', fontWeight: 900, color: 'var(--yellow-dark)' }}>₹1,42,800</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>AVERAGE TICKET</div>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)' }}>₹2,850</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>SWIRL-FREE PASS RATE</div>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', fontWeight: 900, color: '#10B981' }}>99.8%</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>WARRANTY CLAIMS</div>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', fontWeight: 900, color: '#3B82F6' }}>0</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1985,7 +2895,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       <input 
                         type="text" 
                         className="admin-search-input" 
-                        placeholder={`Leave blank to keep "${adminUsername}"`}
+                        placeholder={` "${adminUsername}"`}
                         value={newUserInput}
                         onChange={(e) => setNewUserInput(e.target.value)}
                       />
@@ -2303,12 +3213,12 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="submit" className="btn-automotive-cta" style={{ flex: 1, justifyContent: 'center' }}>
-                  <span>SAVE CLIENT RECORD →</span>
-                </button>
-                <button type="button" className="btn-ghost" onClick={() => setIsAddCustomerOpen(false)}>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '18px' }}>
+                <button type="button" className="btn-ghost" style={{ padding: '6px 14px', fontSize: '0.78rem' }} onClick={() => setIsAddCustomerOpen(false)}>
                   Cancel
+                </button>
+                <button type="submit" className="btn-automotive-cta" style={{ padding: '6px 16px', fontSize: '0.78rem' }}>
+                  <span>SAVE CLIENT RECORD →</span>
                 </button>
               </div>
             </form>
@@ -2425,7 +3335,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px', alignItems: 'flex-start' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>BADGE / TAG</label>
                   <input 
@@ -2437,14 +3347,53 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>THUMBNAIL IMAGE URL</label>
-                  <input 
-                    type="text" 
-                    className="admin-search-input" 
-                    value={serviceFormData.thumbnail}
-                    onChange={(e) => setServiceFormData({ ...serviceFormData, thumbnail: e.target.value })}
-                    placeholder="/assets/detail_after.jpg"
-                  />
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>SERVICE THUMBNAIL</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <label style={{ 
+                      flex: 1, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '6px', 
+                      padding: '9px 12px', 
+                      background: 'var(--bg-subtle)', 
+                      border: '1px dashed var(--border-yellow)', 
+                      borderRadius: '8px', 
+                      cursor: 'pointer', 
+                      fontSize: '0.78rem', 
+                      fontWeight: 700, 
+                      color: 'var(--text-primary)',
+                      boxSizing: 'border-box'
+                    }}>
+                      📁 Upload Image
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              if (typeof reader.result === 'string') {
+                                setServiceFormData(prev => ({ ...prev, thumbnail: reader.result as string }));
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }} 
+                      />
+                    </label>
+                    {serviceFormData.thumbnail && (
+                      <div style={{ width: '38px', height: '38px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+                        <img 
+                          src={resolveServiceImage(serviceFormData.thumbnail)} 
+                          alt="Thumbnail Preview" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2511,12 +3460,269 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="submit" className="btn-automotive-cta" style={{ flex: 1, justifyContent: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '18px' }}>
+                <button type="button" className="btn-ghost" style={{ padding: '6px 14px', fontSize: '0.78rem' }} onClick={() => setIsServiceModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-automotive-cta" style={{ padding: '6px 16px', fontSize: '0.78rem' }}>
                   <span>{editingService ? 'UPDATE SERVICE →' : 'PUBLISH TO WEBSITE →'}</span>
                 </button>
-                <button type="button" className="btn-ghost" onClick={() => setIsServiceModalOpen(false)}>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Transformation Work Modal */}
+      {isWorkModalOpen && (
+        <div className="admin-modal-backdrop" onClick={() => setIsWorkModalOpen(false)}>
+          <div className="admin-modal-card" style={{ maxWidth: '720px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+                  {editingWork ? 'Edit Car Transformation' : 'Add New Car Transformation'}
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Configure car before/after photos and detailing specifications shown on the website
+                </p>
+              </div>
+              <button 
+                type="button" 
+                style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: 'var(--text-primary)' }}
+                onClick={() => setIsWorkModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWork}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    CAR MODEL / TITLE *
+                  </label>
+                  <input 
+                    type="text" 
+                    className="admin-search-input" 
+                    required 
+                    placeholder="e.g. McLaren 720S Performance"
+                    value={workFormData.title}
+                    onChange={(e) => setWorkFormData({ ...workFormData, title: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    CATEGORY *
+                  </label>
+                  <select 
+                    className="admin-search-input"
+                    value={workFormData.category}
+                    onChange={(e) => setWorkFormData({ ...workFormData, category: e.target.value })}
+                  >
+                    <option value="CERAMIC">CERAMIC</option>
+                    <option value="PPF">PPF</option>
+                    <option value="PAINT CORRECTION">PAINT CORRECTION</option>
+                    <option value="INTERIOR">INTERIOR</option>
+                    <option value="CUSTOM">CUSTOM</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  DETAILING SERVICE PROVIDED *
+                </label>
+                <input 
+                  type="text" 
+                  className="admin-search-input" 
+                  required 
+                  placeholder="e.g. 9H Double Coat Ceramic Armor & Glaze"
+                  value={workFormData.service}
+                  onChange={(e) => setWorkFormData({ ...workFormData, service: e.target.value })}
+                />
+              </div>
+
+              {/* Before & After Image Inputs */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                {/* Before Image Input */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    🔴 BEFORE IMAGE URL OR UPLOAD *
+                  </label>
+                  <input 
+                    type="text" 
+                    className="admin-search-input" 
+                    placeholder="e.g. https://example.com/before.jpg or upload below"
+                    value={workFormData.beforeImg}
+                    onChange={(e) => setWorkFormData({ ...workFormData, beforeImg: e.target.value })}
+                    style={{ marginBottom: '8px' }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <label 
+                      style={{ 
+                        fontSize: '0.7rem', 
+                        padding: '6px 12px', 
+                        background: 'var(--bg-subtle)', 
+                        border: '1px solid var(--border-subtle)', 
+                        borderRadius: '4px', 
+                        cursor: 'pointer',
+                        color: 'var(--text-secondary)',
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      📁 Upload Photo
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleWorkImageUpload('beforeImg', e)} 
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* After Image Input */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    🟢 AFTER IMAGE URL OR UPLOAD *
+                  </label>
+                  <input 
+                    type="text" 
+                    className="admin-search-input" 
+                    placeholder="e.g. https://example.com/after.jpg or upload below"
+                    value={workFormData.afterImg}
+                    onChange={(e) => setWorkFormData({ ...workFormData, afterImg: e.target.value })}
+                    style={{ marginBottom: '8px' }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <label 
+                      style={{ 
+                        fontSize: '0.7rem', 
+                        padding: '6px 12px', 
+                        background: 'var(--bg-subtle)', 
+                        border: '1px solid var(--border-subtle)', 
+                        borderRadius: '4px', 
+                        cursor: 'pointer',
+                        color: 'var(--text-secondary)',
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      📁 Upload Photo
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleWorkImageUpload('afterImg', e)} 
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Preview Box */}
+              <div style={{ marginBottom: '16px', background: 'var(--bg-subtle)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Live Visual Preview (Before & After)
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', height: '140px' }}>
+                  <div style={{ position: 'relative', borderRadius: '6px', overflow: 'hidden', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)' }}>
+                    {workFormData.beforeImg ? (
+                      <>
+                        <img 
+                          src={resolveWorkImage(workFormData.beforeImg, '')} 
+                          alt="Before Preview" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <span style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(220, 38, 38, 0.9)', color: '#fff', fontSize: '0.62rem', fontWeight: 800, padding: '2px 6px', borderRadius: '3px' }}>
+                          BEFORE PREVIEW
+                        </span>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+                        <span style={{ fontSize: '1.2rem' }}>📷</span>
+                        <span>Before Image</span>
+                        <span style={{ fontSize: '0.62rem', opacity: 0.7 }}>(Upload to preview)</span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ position: 'relative', borderRadius: '6px', overflow: 'hidden', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)' }}>
+                    {workFormData.afterImg ? (
+                      <>
+                        <img 
+                          src={resolveWorkImage(workFormData.afterImg, '')} 
+                          alt="After Preview" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <span style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(16, 185, 129, 0.95)', color: '#fff', fontSize: '0.62rem', fontWeight: 800, padding: '2px 6px', borderRadius: '3px' }}>
+                          AFTER PREVIEW
+                        </span>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+                        <span style={{ fontSize: '1.2rem' }}>📷</span>
+                        <span>After Image</span>
+                        <span style={{ fontSize: '0.62rem', opacity: 0.7 }}>(Upload to preview)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    TURNAROUND DURATION (OPTIONAL)
+                  </label>
+                  <input 
+                    type="text" 
+                    className="admin-search-input" 
+                    placeholder="e.g. 3 Days (Optional)"
+                    value={workFormData.duration}
+                    onChange={(e) => setWorkFormData({ ...workFormData, duration: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    STUDIO WARRANTY
+                  </label>
+                  <input 
+                    type="text" 
+                    className="admin-search-input" 
+                    placeholder="e.g. 5-Year Guarantee"
+                    value={workFormData.warranty}
+                    onChange={(e) => setWorkFormData({ ...workFormData, warranty: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  TRANSFORMATION DESCRIPTION
+                </label>
+                <textarea 
+                  className="admin-search-input" 
+                  rows={3}
+                  placeholder="Detailing procedures performed on this vehicle..."
+                  value={workFormData.description}
+                  onChange={(e) => setWorkFormData({ ...workFormData, description: e.target.value })}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '18px' }}>
+                <button type="button" className="btn-ghost" style={{ padding: '6px 14px', fontSize: '0.78rem' }} onClick={() => setIsWorkModalOpen(false)}>
                   Cancel
+                </button>
+                <button type="submit" className="btn-automotive-cta" style={{ padding: '6px 16px', fontSize: '0.78rem' }}>
+                  <span>{editingWork ? 'UPDATE TRANSFORMATION →' : 'PUBLISH TO WEBSITE →'}</span>
                 </button>
               </div>
             </form>

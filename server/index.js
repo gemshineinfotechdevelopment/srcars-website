@@ -8,6 +8,7 @@ import { Settings } from './models/Settings.js';
 import { Booking } from './models/Booking.js';
 import { Customer } from './models/Customer.js';
 import { Service } from './models/Service.js';
+import { Work } from './models/Work.js';
 
 dotenv.config();
 
@@ -115,6 +116,83 @@ const defaultServices = [
 
 let memoryServices = [...defaultServices];
 
+const defaultWorks = [
+  {
+    id: 'mclaren-720s',
+    title: 'McLaren 720S Performance',
+    category: 'CERAMIC',
+    service: '9H Double Coat Ceramic Armor & Glaze',
+    beforeImg: '/assets/detail_before.jpg',
+    afterImg: '/assets/hero_car.jpg',
+    img: '/assets/hero_car.jpg',
+    duration: '3 Days',
+    warranty: '5-Year Guarantee',
+    description: 'Multi-layer ultra-hydrophobic ceramic glass coating with optical gloss enhancement on Papaya Spark metallic paint.'
+  },
+  {
+    id: 'porsche-gt3',
+    title: 'Porsche 911 GT3 RS',
+    category: 'PAINT CORRECTION',
+    service: 'Stage 3 Concours Paint Correction & Sealant',
+    beforeImg: '/assets/detail_before.jpg',
+    afterImg: '/assets/service_technician.jpg',
+    img: '/assets/service_technician.jpg',
+    duration: '48 Hours',
+    warranty: '100% Swirl-Free',
+    description: 'Micrometer-calibrated orbital polishing eliminating 95% of track-day clear coat haze and swirl trails.'
+  },
+  {
+    id: 'mercedes-g63',
+    title: 'Mercedes-AMG G63',
+    category: 'INTERIOR',
+    service: 'Concours Leather Spa & Ozone Sanitization',
+    beforeImg: '/assets/detail_before.jpg',
+    afterImg: '/assets/interior_detailing.jpg',
+    img: '/assets/interior_detailing.jpg',
+    duration: '24 Hours',
+    warranty: 'Hospital Grade',
+    description: 'Full Swissvax leather restoration, high-pressure steam extraction of deep carpets, and active ozone deodorization.'
+  },
+  {
+    id: 'bmw-m4',
+    title: 'BMW M4 Competition',
+    category: 'CERAMIC',
+    service: 'Gloss Black Revival & 10H Graphene Shield',
+    beforeImg: '/assets/detail_before.jpg',
+    afterImg: '/assets/tech_car.jpg',
+    img: '/assets/tech_car.jpg',
+    duration: '3 Days',
+    warranty: '7-Year Guarantee',
+    description: 'Diamond hardness graphene infusion defending against acid rain, UV radiation, and high-temp brake dust fallout.'
+  },
+  {
+    id: 'audi-rs7',
+    title: 'Audi RS7 Sportback',
+    category: 'PPF',
+    service: 'Full Body Self-Healing Optical TPU PPF',
+    beforeImg: '/assets/detail_before.jpg',
+    afterImg: '/assets/detail_after.jpg',
+    img: '/assets/detail_after.jpg',
+    duration: '4 Days',
+    warranty: '10-Year Anti-Yellow',
+    description: 'Wrap-around invisible edge protection guarding front bumper, hood, and rocker panels from highway stone chips.'
+  },
+  {
+    id: 'lamborghini-huracan',
+    title: 'Lamborghini Huracán EVO',
+    category: 'PPF',
+    service: 'Stealth Matte Armor PPF & Ceramic Topcoat',
+    beforeImg: '/assets/detail_before.jpg',
+    afterImg: '/assets/showcase_car.jpg',
+    img: '/assets/showcase_car.jpg',
+    duration: '5 Days',
+    warranty: '10-Year Guarantee',
+    description: 'Satin finish TPU wrap with built-in instant thermal self-healing properties activated under direct sun heat.'
+  }
+];
+
+let memoryWorks = [...defaultWorks];
+
 // Database Connection
 const rawUri = process.env.MONGODB_URI || '';
 const mongoUri = rawUri.endsWith('/')
@@ -151,6 +229,17 @@ if (mongoUri) {
         }
       } catch (e) {
         console.error('Error seeding services:', e.message);
+      }
+
+      // Initialize default transformation works if collection empty
+      try {
+        const worksCount = await Work.countDocuments();
+        if (worksCount === 0) {
+          await Work.insertMany(defaultWorks);
+          console.log('✨ Seeded initial transformation works into MongoDB');
+        }
+      } catch (e) {
+        console.error('Error seeding works:', e.message);
       }
     })
     .catch((err) => {
@@ -304,6 +393,98 @@ app.delete('/api/services/:id', async (req, res) => {
 });
 
 // ==========================================
+// 2B. OUR WORKS & SHOWROOM DELIVERIES (TRANSFORMATIONS) ROUTES
+// ==========================================
+
+app.get('/api/works', async (req, res) => {
+  try {
+    if (isMongoConnected && mongoose.connection.readyState === 1) {
+      const works = await Work.find().sort({ createdAt: 1 });
+      if (works.length > 0) {
+        return res.json({ success: true, data: works });
+      }
+    }
+    return res.json({ success: true, data: memoryWorks });
+  } catch (err) {
+    console.error('GET /api/works error:', err);
+    return res.json({ success: true, data: memoryWorks });
+  }
+});
+
+app.post('/api/works', async (req, res) => {
+  try {
+    const newWork = {
+      id: req.body.id || `work-${Date.now()}`,
+      title: req.body.title,
+      category: req.body.category || 'CERAMIC',
+      service: req.body.service,
+      beforeImg: req.body.beforeImg || '/assets/detail_before.jpg',
+      afterImg: req.body.afterImg || '/assets/detail_after.jpg',
+      img: req.body.afterImg || req.body.img || '/assets/detail_after.jpg',
+      duration: req.body.duration || '3 Days',
+      warranty: req.body.warranty || '5-Year Guarantee',
+      description: req.body.description || ''
+    };
+
+    if (isMongoConnected && mongoose.connection.readyState === 1) {
+      const created = await Work.create(newWork);
+      return res.status(201).json({ success: true, data: created });
+    }
+
+    memoryWorks.push(newWork);
+    return res.status(201).json({ success: true, data: newWork });
+  } catch (err) {
+    console.error('POST /api/works error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/works/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    if (updates.afterImg && !updates.img) {
+      updates.img = updates.afterImg;
+    }
+
+    if (isMongoConnected && mongoose.connection.readyState === 1) {
+      const updated = await Work.findOneAndUpdate({ id }, { $set: updates }, { new: true });
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Work item not found' });
+      }
+      return res.json({ success: true, data: updated });
+    }
+
+    const idx = memoryWorks.findIndex(w => w.id === id);
+    if (idx >= 0) {
+      memoryWorks[idx] = { ...memoryWorks[idx], ...updates };
+      return res.json({ success: true, data: memoryWorks[idx] });
+    }
+    return res.status(404).json({ success: false, error: 'Work not found in memory' });
+  } catch (err) {
+    console.error('PUT /api/works/:id error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/works/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (isMongoConnected && mongoose.connection.readyState === 1) {
+      await Work.findOneAndDelete({ id });
+      return res.json({ success: true, message: `Work ${id} deleted` });
+    }
+
+    memoryWorks = memoryWorks.filter(w => w.id !== id);
+    return res.json({ success: true, message: `Work ${id} deleted from memory` });
+  } catch (err) {
+    console.error('DELETE /api/works/:id error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
 // 3. BOOKINGS & APPOINTMENTS ROUTES
 // ==========================================
 
@@ -336,7 +517,16 @@ app.post('/api/bookings', async (req, res) => {
       studio = 'Chennai Studio (Guindy)'
     } = req.body;
 
-    const bookingId = id || `CC-${Math.floor(100000 + Math.random() * 900000)}`;
+    let bookingId = id;
+    if (!bookingId) {
+      if (isMongoConnected && mongoose.connection.readyState === 1) {
+        const lastBooking = await Booking.findOne().sort({ createdAt: -1 });
+        const lastNum = lastBooking && !isNaN(parseInt(lastBooking.id, 10)) ? parseInt(lastBooking.id, 10) : 1000;
+        bookingId = String(Math.max(lastNum + 1, 1001));
+      } else {
+        bookingId = '1001';
+      }
+    }
 
     const newBookingData = {
       id: bookingId,

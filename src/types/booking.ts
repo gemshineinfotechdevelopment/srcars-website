@@ -13,4 +13,5 @@ export interface BookingRecord {
   price?: string;
   studio?: string;
   createdAt: string;
+  isNew?: boolean;
 }

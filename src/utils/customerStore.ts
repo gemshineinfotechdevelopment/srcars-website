@@ -2,85 +2,33 @@ import type { CustomerRecord } from '../types/customer';
 
 const CUSTOMERS_KEY = 'cc_admin_customers_data';
 
-const initialDemoCustomers: CustomerRecord[] = [
-  {
-    id: 'CUST-001',
-    name: 'Vikramaditya Roy',
-    phone: '+91 98401 23456',
-    email: 'vikram.roy@supercars.in',
-    carModels: ['Porsche 911 GT3 RS', 'Mercedes-AMG G63'],
-    totalVisits: 6,
-    totalSpent: '₹34,800',
-    tier: 'VIP Supercar',
-    lastVisit: '2026-11-18',
-    preferredService: 'Ceramic & Graphene Coating',
-    notes: 'Long-time collector. Always prefers enclosed flatbed collection and 10H cure.',
-  },
-  {
-    id: 'CUST-002',
-    name: 'Ananya Deshmukh',
-    phone: '+91 97112 88490',
-    email: 'ananya.d@ecrvillas.com',
-    carModels: ['McLaren 720S Spider'],
-    totalVisits: 3,
-    totalSpent: '₹19,500',
-    tier: 'VIP Supercar',
-    lastVisit: '2026-11-19',
-    preferredService: 'Full Body Armor PPF',
-    notes: 'Requests photo updates on WhatsApp every 4 hours during application.',
-  },
-  {
-    id: 'CUST-003',
-    name: 'Rajesh K. Sundaram',
-    phone: '+91 94441 55678',
-    email: 'rajesh.sundaram@autoenclave.com',
-    carModels: ['Mercedes-AMG G63', 'BMW 7 Series'],
-    totalVisits: 5,
-    totalSpent: '₹14,200',
-    tier: 'Elite',
-    lastVisit: '2026-11-16',
-    preferredService: 'Interior Sanctuary Spa',
-    notes: 'Swissvax leather balm fan. Prefers scent-free ozone cabin sterilization.',
-  },
-  {
-    id: 'CUST-004',
-    name: 'Karthik Narayanan',
-    phone: '+91 98840 99123',
-    email: 'karthik.n@motorsports.in',
-    carModels: ['BMW M4 Competition'],
-    totalVisits: 4,
-    totalSpent: '₹18,400',
-    tier: 'Elite',
-    lastVisit: '2026-11-17',
-    preferredService: 'Stage 2/3 Paint Correction',
-    notes: 'Tracks his vehicle at MMRT circuit. Frequent rubber haze removal needed.',
-  },
-  {
-    id: 'CUST-005',
-    name: 'Deepak Chawla',
-    phone: '+91 99001 44556',
-    email: 'deepak.chawla@techhub.com',
-    carModels: ['Audi RS7 Sportback'],
-    totalVisits: 2,
-    totalSpent: '₹9,800',
-    tier: 'Standard',
-    lastVisit: '2026-11-14',
-    preferredService: 'Ceramic & Graphene Coating',
-    notes: 'First-time ceramic client. Received 5-year factory warranty card.',
-  },
+const DUMMY_DEMO_NAMES = [
+  'Vikramaditya Roy',
+  'Ananya Deshmukh',
+  'Rajesh K. Sundaram',
+  'Karthik Narayanan',
+  'Deepak Chawla'
 ];
+
+const initialDemoCustomers: CustomerRecord[] = [];
 
 export const getCustomers = (): CustomerRecord[] => {
   try {
     const raw = localStorage.getItem(CUSTOMERS_KEY);
     if (!raw) {
-      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(initialDemoCustomers));
-      return initialDemoCustomers;
+      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify([]));
+      return [];
     }
-    return JSON.parse(raw);
+    const parsed: CustomerRecord[] = JSON.parse(raw);
+    const clean = parsed.filter(c => !DUMMY_DEMO_NAMES.includes(c.name));
+    if (clean.length !== parsed.length) {
+      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(clean));
+      return clean;
+    }
+    return parsed;
   } catch (err) {
     console.error('Failed to load customers from storage', err);
-    return initialDemoCustomers;
+    return [];
   }
 };
 

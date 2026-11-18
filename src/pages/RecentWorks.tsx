@@ -1,95 +1,19 @@
 import React, { useState } from 'react';
-import heroCarImg from '../assets/hero_car.jpg';
-import technicianImg from '../assets/service_technician.jpg';
-import interiorImg from '../assets/interior_detailing.jpg';
-import techCarImg from '../assets/tech_car.jpg';
-import detailAfterImg from '../assets/detail_after.jpg';
-import showcaseCarImg from '../assets/showcase_car.jpg';
+import { useWorksList, type WorkItem } from '../utils/worksStore';
+import { BeforeAfterModal } from '../components/BeforeAfterModal';
 
 interface RecentWorksProps {
   onOpenBooking: (serviceName?: string) => void;
 }
 
-interface WorkItem {
-  id: string;
-  title: string;
-  category: 'CERAMIC' | 'PPF' | 'PAINT CORRECTION' | 'INTERIOR';
-  service: string;
-  img: string;
-  duration: string;
-  warranty: string;
-  description: string;
-}
-
-const portfolioData: WorkItem[] = [
-  {
-    id: 'mclaren-720s',
-    title: 'McLaren 720S Performance',
-    category: 'CERAMIC',
-    service: '9H Double Coat Ceramic Armor & Glaze',
-    img: heroCarImg,
-    duration: '3 Days',
-    warranty: '5-Year Guarantee',
-    description: 'Multi-layer ultra-hydrophobic ceramic glass coating with optical gloss enhancement on Papaya Spark metallic paint.',
-  },
-  {
-    id: 'porsche-gt3',
-    title: 'Porsche 911 GT3 RS',
-    category: 'PAINT CORRECTION',
-    service: 'Stage 3 Concours Paint Correction & Sealant',
-    img: technicianImg,
-    duration: '48 Hours',
-    warranty: '100% Swirl-Free',
-    description: 'Micrometer-calibrated orbital polishing eliminating 95% of track-day clear coat haze and swirl trails.',
-  },
-  {
-    id: 'mercedes-g63',
-    title: 'Mercedes-AMG G63',
-    category: 'INTERIOR',
-    service: 'Concours Leather Spa & Ozone Sanitization',
-    img: interiorImg,
-    duration: '24 Hours',
-    warranty: 'Hospital Grade',
-    description: 'Full Swissvax leather restoration, high-pressure steam extraction of deep carpets, and active ozone deodorization.',
-  },
-  {
-    id: 'bmw-m4',
-    title: 'BMW M4 Competition',
-    category: 'CERAMIC',
-    service: 'Gloss Black Revival & 10H Graphene Shield',
-    img: techCarImg,
-    duration: '3 Days',
-    warranty: '7-Year Guarantee',
-    description: 'Diamond hardness graphene infusion defending against acid rain, UV radiation, and high-temp brake dust fallout.',
-  },
-  {
-    id: 'audi-rs7',
-    title: 'Audi RS7 Sportback',
-    category: 'PPF',
-    service: 'Full Body Self-Healing Optical TPU PPF',
-    img: detailAfterImg,
-    duration: '4 Days',
-    warranty: '10-Year Anti-Yellow',
-    description: 'Wrap-around invisible edge protection guarding front bumper, hood, and rocker panels from highway stone chips.',
-  },
-  {
-    id: 'lamborghini-huracan',
-    title: 'Lamborghini Huracán EVO',
-    category: 'PPF',
-    service: 'Stealth Matte Armor PPF & Ceramic Topcoat',
-    img: showcaseCarImg,
-    duration: '5 Days',
-    warranty: '10-Year Guarantee',
-    description: 'Satin finish TPU wrap with built-in instant thermal self-healing properties activated under direct sun heat.',
-  },
-];
-
 export const RecentWorks: React.FC<RecentWorksProps> = ({ onOpenBooking }) => {
+  const portfolioData = useWorksList();
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
+  const [selectedGalleryWork, setSelectedGalleryWork] = useState<WorkItem | null>(null);
 
   const filteredWorks = portfolioData.filter((item) => {
     if (activeFilter === 'ALL') return true;
-    return item.category === activeFilter;
+    return item.category?.toUpperCase() === activeFilter.toUpperCase();
   });
 
   return (
@@ -324,7 +248,6 @@ export const RecentWorks: React.FC<RecentWorksProps> = ({ onOpenBooking }) => {
         <div className="container">
           {/* Header */}
           <div className="rw-header">
-            <span className="rw-pill">PORTFOLIO & TRANSFORMATIONS</span>
             <h1 className="rw-title">
               OUR RECENT WORKS & <span className="highlight-yellow">SHOWROOM DELIVERIES</span>
             </h1>
@@ -350,8 +273,13 @@ export const RecentWorks: React.FC<RecentWorksProps> = ({ onOpenBooking }) => {
           <div className="rw-cards-grid">
             {filteredWorks.map((item) => (
               <div key={item.id} className="rw-card">
-                <div className="rw-img-frame">
-                  <img src={item.img} alt={item.title} className="rw-img" />
+                <div 
+                  className="rw-img-frame" 
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setSelectedGalleryWork(item)}
+                  title="Click to view Before / After comparison"
+                >
+                  <img src={item.afterImg || item.img} alt={item.title} className="rw-img" />
                   <span className="rw-tag">{item.category}</span>
                 </div>
                 <div className="rw-card-body">
@@ -364,12 +292,24 @@ export const RecentWorks: React.FC<RecentWorksProps> = ({ onOpenBooking }) => {
                     <span>🛡️ Warranty: <strong>{item.warranty}</strong></span>
                   </div>
 
-                  <button 
-                    className="btn-automotive-cta rw-card-btn"
-                    onClick={() => onOpenBooking(item.service)}
-                  >
-                    <span>BOOK THIS TREATMENT →</span>
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <button 
+                      type="button"
+                      className="btn-ghost"
+                      style={{ flex: 1, padding: '10px 8px', fontSize: '0.76rem', justifyContent: 'center' }}
+                      onClick={() => setSelectedGalleryWork(item)}
+                    >
+                      <span>🔍 BEFORE / AFTER</span>
+                    </button>
+                    <button 
+                      type="button"
+                      className="btn-automotive-cta"
+                      style={{ flex: 1, padding: '10px 8px', fontSize: '0.76rem', justifyContent: 'center' }}
+                      onClick={() => onOpenBooking(item.service)}
+                    >
+                      <span>BOOK NOW →</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -392,6 +332,15 @@ export const RecentWorks: React.FC<RecentWorksProps> = ({ onOpenBooking }) => {
           </div>
         </div>
       </div>
+
+      {/* Before / After Comparison Modal */}
+      {selectedGalleryWork && (
+        <BeforeAfterModal
+          work={selectedGalleryWork}
+          onClose={() => setSelectedGalleryWork(null)}
+          onOpenBooking={onOpenBooking}
+        />
+      )}
     </>
   );
 };

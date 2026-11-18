@@ -6,6 +6,8 @@ import techCarImg from '../assets/tech_car.jpg';
 import detailAfterImg from '../assets/detail_after.jpg';
 import heroBannerVideo from '../assets/hero_banner.mp4';
 import { useServicesList, resolveServiceImage } from '../utils/servicesStore';
+import { useWorksList, type WorkItem } from '../utils/worksStore';
+import { BeforeAfterModal } from '../components/BeforeAfterModal';
 import {
   DiamondIcon,
   SparkleIcon,
@@ -116,41 +118,24 @@ const servicesData: ServiceData[] = [
   },
 ];
 
-// 4 Gallery Transformation Items
-const transformationWorks = [
-  {
-    id: 'mclaren-720s',
-    title: 'McLaren 720S',
-    service: '9H Double Coat Ceramic Armor',
-    tag: 'CERAMIC',
-    img: heroCarImg,
-  },
-  {
-    id: 'porsche-gt3',
-    title: 'Porsche 911 GT3',
-    service: 'Stage 3 Paint Correction & PPF',
-    tag: 'PAINT CORRECTION',
-    img: technicianImg,
-  },
-  {
-    id: 'mercedes-g63',
-    title: 'Mercedes-Benz G63',
-    service: 'Full Matte Stealth PPF & Interior Spa',
-    tag: 'INTERIOR & PPF',
-    img: interiorImg,
-  },
-  {
-    id: 'bmw-m4',
-    title: 'BMW M4 Competition',
-    service: 'Gloss Black Paint Revival & Ceramic Guard',
-    tag: 'SHOWROOM',
-    img: techCarImg,
-  },
-];
-
 export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
   const dynamicServices = useServicesList();
+  const dynamicWorks = useWorksList();
+  const [selectedGalleryWork, setSelectedGalleryWork] = useState<WorkItem | null>(null);
   const [activeServiceId, setActiveServiceId] = useState<string>('ceramic');
+
+  const servicesTrackRef = useRef<HTMLDivElement>(null);
+  const [isServicesScrolledDown, setIsServicesScrolledDown] = useState<boolean>(false);
+
+  const handleScrollServices = (direction: 'down' | 'up') => {
+    if (servicesTrackRef.current) {
+      const scrollAmount = window.innerWidth <= 1024 ? 110 : 150;
+      servicesTrackRef.current.scrollBy({
+        top: direction === 'down' ? scrollAmount : -scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHeroRevealed, setIsHeroRevealed] = useState<boolean>(false);
@@ -568,7 +553,68 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
         .services-left-col {
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 10px;
+        }
+        .services-scroll-track.fit-all {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          max-height: none;
+          overflow-y: visible;
+          padding: 0;
+        }
+        .services-scroll-track.scrollable {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          max-height: 600px; /* comfortably fits 5 services on desktop */
+          overflow-y: auto;
+          scroll-behavior: smooth;
+          padding: 2px 6px 2px 2px;
+          scrollbar-width: thin;
+          scrollbar-color: var(--yellow) transparent;
+        }
+        .services-scroll-track::-webkit-scrollbar {
+          width: 5px;
+        }
+        .services-scroll-track::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .services-scroll-track::-webkit-scrollbar-thumb {
+          background: var(--yellow);
+          border-radius: 4px;
+        }
+        .services-scroll-controls {
+          width: 100%;
+        }
+        .services-view-more-btn {
+          width: 100%;
+          background: var(--bg-card);
+          border: 1px dashed var(--border-yellow);
+          color: var(--text-primary);
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-family: var(--font-heading);
+          font-size: 0.74rem;
+          font-weight: 800;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: all 0.25s ease;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .services-view-more-btn:hover {
+          background: var(--yellow-accent);
+          color: #060709;
+          border-style: solid;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 18px rgba(234, 179, 8, 0.3);
+        }
+        .services-view-more-btn.up {
+          border-color: var(--border-subtle);
+          background: var(--bg-subtle);
         }
         .service-select-card {
           position: relative;
@@ -1356,31 +1402,82 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
             font-size: 0.85rem;
           }
           .services-showcase-section {
-            padding: 50px 0 70px;
+            padding: 40px 0 60px;
             scroll-margin-top: 72px;
           }
+          .services-showcase-section .container {
+            padding: 0 12px;
+          }
           .services-two-division-wrap {
-            grid-template-columns: 82px 1fr;
-            gap: 10px;
+            grid-template-columns: 84px 1fr;
+            gap: 12px;
             align-items: flex-start;
           }
           .services-left-col {
-            position: sticky;
-            top: 75px;
-            z-index: 15;
+            position: relative;
+            top: 0;
             display: flex;
             flex-direction: column;
             gap: 8px;
             flex-shrink: 0;
+            width: 84px;
+            margin: 0;
+            padding: 0;
+          }
+          .services-scroll-track.fit-all {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: none;
+            overflow-y: visible;
+            padding: 0;
+            margin: 0;
+          }
+          .services-scroll-track.scrollable {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 460px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            padding: 0;
+            margin: 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--yellow) transparent;
+          }
+          .services-scroll-controls {
+            margin-top: 4px;
+            width: 100%;
+          }
+          .services-view-more-btn {
+            padding: 6px 4px;
+            border-radius: 8px;
+            font-size: 0.6rem;
+            flex-direction: column;
+            gap: 2px;
+            text-align: center;
+          }
+          .services-view-more-btn .btn-text {
+            font-size: 0.58rem;
+            line-height: 1.1;
+          }
+          .services-view-more-btn .btn-arrow {
+            font-size: 0.72rem;
           }
           .service-select-card {
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             text-align: center;
-            padding: 8px 4px 6px;
-            gap: 5px;
+            padding: 8px 4px 7px;
+            gap: 4px;
             border-radius: 10px;
             border-width: 1.5px;
+            min-height: 82px;
+            box-sizing: border-box;
+            width: 100%;
+            position: relative;
+            margin: 0;
           }
           .service-select-card:hover {
             transform: none;
@@ -1389,16 +1486,19 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
             width: 44px;
             height: 44px;
             min-width: 44px;
-            border-radius: 7px;
+            border-radius: 8px;
           }
           .service-info-wrap {
             width: 100%;
+            display: flex;
+            flex-direction: column;
             align-items: center;
+            gap: 2px;
           }
           .title-row {
             flex-direction: column;
             align-items: center;
-            gap: 3px;
+            gap: 2px;
             margin-bottom: 0;
             width: 100%;
           }
@@ -1412,6 +1512,10 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
             line-height: 1.15;
             text-align: center;
             color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 76px;
           }
           .service-select-card.active .service-card-name-mobile {
             color: var(--yellow-dark);
@@ -1420,9 +1524,11 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
             color: var(--yellow);
           }
           .service-tag-pill {
-            font-size: 0.5rem;
-            padding: 1px 4px;
-            letter-spacing: 0.2px;
+            font-size: 0.48rem;
+            padding: 1px 5px;
+            letter-spacing: 0.3px;
+            border-radius: 3px;
+            line-height: 1.2;
           }
           .service-card-desc {
             display: none;
@@ -1436,20 +1542,24 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
           .service-select-card.active {
             border-color: var(--yellow-dark);
             background: rgba(234, 179, 8, 0.12);
-            box-shadow: 0 0 12px rgba(234, 179, 8, 0.35);
+            box-shadow: 0 0 10px rgba(234, 179, 8, 0.25);
           }
           [data-theme="dark"] .service-select-card.active {
             border-color: var(--yellow);
             background: rgba(255, 230, 0, 0.14);
-            box-shadow: 0 0 14px rgba(255, 230, 0, 0.4);
+            box-shadow: 0 0 10px rgba(255, 230, 0, 0.3);
           }
           .services-right-col {
             min-width: 0;
             width: 100%;
+            margin: 0;
+            padding: 0;
           }
           .service-showcase-card {
             border-radius: 12px;
             width: 100%;
+            margin: 0;
+            border: 1.5px solid var(--border-yellow);
           }
           .showcase-banner {
             height: 180px;
@@ -1660,54 +1770,80 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
             </div>
 
             <div className="services-two-division-wrap scroll-reveal-bottom">
-              {/* Left Division: Selectable Service Cards */}
+              {/* Left Division: Selectable Service Cards (All 5 visible cleanly, scroll enabled only if > 5 services) */}
               <div className="services-left-col">
-                {dynamicServices.map((service) => (
-                  <div
-                    key={service.id}
-                    className={`service-select-card ${activeService.id === service.id ? 'active' : ''}`}
-                    onClick={() => {
-                      setActiveServiceId(service.id);
-                      if (window.innerWidth <= 768) {
-                        const showcaseEl = document.querySelector('.services-right-col');
-                        if (showcaseEl) {
-                          const rect = showcaseEl.getBoundingClientRect();
-                          if (rect.top < 65) {
-                            window.scrollTo({
-                              top: window.scrollY + rect.top - 75,
-                              behavior: 'smooth',
-                            });
-                          }
-                        }
-                      }
-                    }}
-                  >
-                    <div className="thumb-frame">
-                      <img 
-                        src={resolveServiceImage(service.thumbnail, detailAfterImg)} 
-                        alt={service.name} 
-                        className="service-thumb-img" 
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = detailAfterImg;
-                        }}
-                      />
-                    </div>
-                    <div className="service-info-wrap">
-                      <div className="title-row">
-                        <h4 className="service-card-name">
-                          <span className="service-card-name-desktop">{service.name}</span>
-                          <span className="service-card-name-mobile">{service.shortName}</span>
-                        </h4>
-                        <span className="service-tag-pill">{service.tag}</span>
+                <div 
+                  ref={servicesTrackRef}
+                  className={`services-scroll-track ${dynamicServices.length > 5 ? 'scrollable' : 'fit-all'}`}
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    setIsServicesScrolledDown(el.scrollTop > 30);
+                  }}
+                >
+                  {dynamicServices.map((service) => (
+                    <div
+                      key={service.id}
+                      className={`service-select-card ${activeService.id === service.id ? 'active' : ''}`}
+                      onClick={() => setActiveServiceId(service.id)}
+                    >
+                      <div className="thumb-frame">
+                        <img 
+                          src={resolveServiceImage(service.thumbnail, detailAfterImg)} 
+                          alt={service.name} 
+                          className="service-thumb-img" 
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = detailAfterImg;
+                          }}
+                        />
                       </div>
-                      <p className="service-card-desc">{service.shortDesc}</p>
-                      <span className="view-details-link">
-                        {activeService.id === service.id ? '● ACTIVE SHOWCASE' : 'SELECT TO INSPECT →'}
-                      </span>
+                      <div className="service-info-wrap">
+                        <div className="title-row">
+                          <h4 className="service-card-name">
+                            <span className="service-card-name-desktop">{service.name}</span>
+                            <span className="service-card-name-mobile">{service.shortName}</span>
+                          </h4>
+                          <span className="service-tag-pill">{service.tag}</span>
+                        </div>
+                        <p className="service-card-desc">{service.shortDesc}</p>
+                        <span className="view-details-link">
+                          {activeService.id === service.id ? '● ACTIVE SHOWCASE' : 'SELECT TO INSPECT →'}
+                        </span>
+                      </div>
+                      <div className="active-glow-indicator"></div>
                     </div>
-                    <div className="active-glow-indicator"></div>
+                  ))}
+                </div>
+
+                {/* Show scroll controls only if more than 5 services exist */}
+                {dynamicServices.length > 5 && (
+                  <div className="services-scroll-controls">
+                    {!isServicesScrolledDown ? (
+                      <button
+                        type="button"
+                        className="services-view-more-btn"
+                        onClick={() => handleScrollServices('down')}
+                        aria-label="View more services"
+                      >
+                        <span className="btn-text">VIEW MORE ({dynamicServices.length - 5}+)</span>
+                        <span className="btn-arrow">↓</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="services-view-more-btn up"
+                        onClick={() => {
+                          if (servicesTrackRef.current) {
+                            servicesTrackRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                          }
+                        }}
+                        aria-label="Scroll back to top of services"
+                      >
+                        <span className="btn-text">SCROLL TO TOP</span>
+                        <span className="btn-arrow">↑</span>
+                      </button>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
 
               {/* Right Division: Animated Detailed Showcase Card (NO PRICE/AMOUNT) */}
@@ -1880,25 +2016,33 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
             </div>
 
             <div className="transformation-cards-grid">
-              {transformationWorks.map((item, index) => (
+              {dynamicWorks.map((item, index) => (
                 <div 
                   key={item.id} 
                   className="transformation-card scroll-reveal-stagger"
                   style={{
                     animationDelay: `${index * 0.18}s`,
                     transitionDelay: `${index * 0.18}s`,
+                    cursor: 'pointer'
                   }}
-                  onClick={() => onOpenBooking(item.service)}
+                  onClick={() => setSelectedGalleryWork(item)}
                 >
                   <div className="trans-img-frame">
-                    <img src={item.img} alt={item.title} className="trans-img" />
-                    <span className="trans-tag-badge">{item.tag}</span>
+                    <img 
+                      src={item.afterImg || item.img} 
+                      alt={item.title} 
+                      className="trans-img" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = heroCarImg;
+                      }}
+                    />
+                    <span className="trans-tag-badge">{item.category}</span>
                   </div>
                   <div className="trans-info">
                     <h4 className="trans-car-title">{item.title}</h4>
                     <p className="trans-service-sub">{item.service}</p>
                     <div className="trans-card-footer">
-                      <span className="trans-link-text">View Gallery</span>
+                      <span className="trans-link-text">View Before / After Gallery</span>
                       <span className="trans-arrow">↗</span>
                     </div>
                   </div>
@@ -1921,6 +2065,15 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
           </div>
         </section>
       </div>
+
+      {/* Before / After Comparison Modal */}
+      {selectedGalleryWork && (
+        <BeforeAfterModal
+          work={selectedGalleryWork}
+          onClose={() => setSelectedGalleryWork(null)}
+          onOpenBooking={onOpenBooking}
+        />
+      )}
     </>
   );
 };
