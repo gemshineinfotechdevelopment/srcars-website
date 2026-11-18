@@ -12,7 +12,7 @@ set -e
 DOMAIN="srcars.gemshine.tech"
 PORT=5030
 PROJECT_DIR="$(pwd)"
-WEB_ROOT="/var/www/${DOMAIN}"
+WEB_ROOT="/var/www/srcars-website"
 
 echo "========================================================================"
 echo "🚀 STARTING ALL-IN-ONE DEPLOYMENT FOR ${DOMAIN}"
@@ -101,7 +101,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# STEP 5: BUILD FRONTEND
+# STEP 5: BUILD FRONTEND & CLEAN WEB ROOT
 # ------------------------------------------------------------------------------
 echo ""
 echo "🏗️ [5/7] Compiling production frontend bundle..."
@@ -109,9 +109,17 @@ npm run build
 
 echo "📂 Publishing files to ${WEB_ROOT}..."
 sudo mkdir -p "${WEB_ROOT}"
-sudo cp -r dist "${WEB_ROOT}/"
+if [ "${PROJECT_DIR}" != "${WEB_ROOT}" ]; then
+    sudo cp -r dist "${WEB_ROOT}/"
+fi
 sudo chown -R www-data:www-data "${WEB_ROOT}"
 sudo chmod -R 755 "${WEB_ROOT}"
+
+# Remove unwanted legacy /var/www/srcars.gemshine.tech folder if it exists
+if [ -d "/var/www/srcars.gemshine.tech" ]; then
+    echo "🧹 Removing legacy /var/www/srcars.gemshine.tech folder..."
+    sudo rm -rf "/var/www/srcars.gemshine.tech"
+fi
 
 # ------------------------------------------------------------------------------
 # STEP 6: START / RELOAD BACKEND WITH PM2
@@ -122,29 +130,49 @@ pm2 startOrReload ecosystem.config.cjs --env production
 pm2 save
 
 # ------------------------------------------------------------------------------
-# STEP 7: CONFIGURE NGINX REVERSE PROXY
+# STEP 7: CONFIGURE NGINX REVERSE PROXY & AUTOMATED HTTPS
 # ------------------------------------------------------------------------------
 echo ""
-echo "🌐 [7/7] Configuring Nginx reverse proxy for ${DOMAIN}..."
+echo "🌐 [7/7] Configuring Nginx reverse proxy for ${DOMAIN} (Target: ${WEB_ROOT}/dist)..."
 
 NGINX_CONF="/etc/nginx/sites-available/${DOMAIN}"
 
-sudo tee "${NGINX_CONF}" > /dev/null <<'NGINX_EOF'
+# Check if SSL Certificate already exists
+if [ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
+    echo "🔒 Existing SSL Certificate detected. Configuring Permanent HTTPS..."
+    sudo tee "${NGINX_CONF}" > /dev/null <<NGINX_EOF
 upstream carcare_backend {
-    server 127.0.0.1:5030;
+    server 127.0.0.1:${PORT};
     keepalive 64;
 }
 
+# Redirect all HTTP traffic to HTTPS (301 Permanent)
 server {
     listen 80;
     listen [::]:80;
-    server_name srcars.gemshine.tech;
+    server_name ${DOMAIN};
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
 
-    root /var/www/srcars.gemshine.tech/dist;
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+# HTTPS Server Block (SSL / Secure)
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name ${DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    root ${WEB_ROOT}/dist;
     index index.html;
 
     gzip on;
@@ -155,16 +183,16 @@ server {
 
     client_max_body_size 25M;
 
-    # API Reverse Proxy to Port 5030
+    # API Reverse Proxy to Port ${PORT}
     location /api/ {
         proxy_pass http://carcare_backend;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
@@ -175,15 +203,78 @@ server {
         expires 30d;
         add_header Cache-Control "public, max-age=2592000, immutable";
         access_log off;
-        try_files $uri =404;
+        try_files \$uri =404;
     }
 
     # SPA Routing Fallback
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files \$uri \$uri/ /index.html;
     }
 }
 NGINX_EOF
+
+else
+    echo "🌐 Initializing Nginx HTTP config before SSL issuance..."
+    sudo tee "${NGINX_CONF}" > /dev/null <<NGINX_EOF
+upstream carcare_backend {
+    server 127.0.0.1:${PORT};
+    keepalive 64;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    root ${WEB_ROOT}/dist;
+    index index.html;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml image/svg+xml;
+
+    client_max_body_size 25M;
+
+    location /api/ {
+        proxy_pass http://carcare_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location ~* \.(?:ico|css|js|gif|jpe?g|png|webp|svg|woff2?|ttf|mp4|webm)$ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+        access_log off;
+        try_files \$uri =404;
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+}
+NGINX_EOF
+
+    sudo ln -sf "${NGINX_CONF}" "/etc/nginx/sites-enabled/${DOMAIN}"
+    sudo nginx -t
+    sudo systemctl reload nginx
+
+    # Automated Let's Encrypt SSL issuance & 301 redirect setup
+    echo "🔒 Requesting Free SSL Certificate from Let's Encrypt for ${DOMAIN}..."
+    sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "admin@gemshine.tech" --redirect || \
+    sudo certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email --redirect || \
+    sudo certbot --nginx -d "${DOMAIN}" --redirect || true
+fi
 
 sudo ln -sf "${NGINX_CONF}" "/etc/nginx/sites-enabled/${DOMAIN}"
 
@@ -196,17 +287,15 @@ sudo nginx -t
 sudo systemctl reload nginx
 
 # ------------------------------------------------------------------------------
-# OPTIONAL: SSL SETUP WITH CERTBOT
+# DEPLOYMENT SUMMARY
 # ------------------------------------------------------------------------------
 echo ""
 echo "========================================================================"
-echo "🎉 APPLICATION DEPLOYED SUCCESSFULLY!"
+echo "🎉 APPLICATION DEPLOYED SUCCESSFULLY TO SRCARS-WEBSITE!"
 echo "------------------------------------------------------------------------"
-echo "🌐 Web URL:      http://${DOMAIN}"
-echo "⚡ Backend API:  http://127.0.0.1:${PORT}/api/health"
-echo "📊 PM2 Status:   pm2 status"
-echo "📋 PM2 Logs:     pm2 logs car-care-app"
-echo ""
-echo "🔒 To activate free HTTPS / SSL certificate with Let's Encrypt, run:"
-echo "   sudo certbot --nginx -d ${DOMAIN}"
+echo "🔒 Web URL (HTTPS):  https://${DOMAIN}"
+echo "📁 Document Root:   ${WEB_ROOT}/dist"
+echo "⚡ Backend API:     http://127.0.0.1:${PORT}/api/health"
+echo "📊 PM2 Status:      pm2 status"
+echo "📋 PM2 Logs:        pm2 logs car-care-app"
 echo "========================================================================"
