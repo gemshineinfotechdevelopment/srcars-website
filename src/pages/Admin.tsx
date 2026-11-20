@@ -501,16 +501,52 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleWorkImageUpload = (field: 'beforeImg' | 'afterImg', e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageFile = (file: File, maxWidth = 1200, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve((e.target?.result as string) || '');
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve((e.target?.result as string) || '');
+        img.src = (e.target?.result as string) || '';
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleWorkImageUpload = async (field: 'beforeImg' | 'afterImg', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setWorkFormData(prev => ({ ...prev, [field]: reader.result as string }));
-      }
-    };
-    reader.readAsDataURL(file);
+    const base64 = await compressImageFile(file, 1200, 0.82);
+    if (base64) {
+      setWorkFormData(prev => ({ ...prev, [field]: base64 }));
+    }
+  };
+
+  const handleServiceThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const base64 = await compressImageFile(file, 800, 0.82);
+    if (base64) {
+      setServiceFormData(prev => ({ ...prev, thumbnail: base64 }));
+    }
   };
 
   // Filtered Bookings
@@ -3370,18 +3406,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                         type="file" 
                         accept="image/*" 
                         style={{ display: 'none' }} 
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = () => {
-                              if (typeof reader.result === 'string') {
-                                setServiceFormData(prev => ({ ...prev, thumbnail: reader.result as string }));
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }} 
+                        onChange={handleServiceThumbnailUpload} 
                       />
                     </label>
                     {serviceFormData.thumbnail && (

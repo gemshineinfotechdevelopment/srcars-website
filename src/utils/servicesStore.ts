@@ -39,7 +39,10 @@ const assetMap: Record<string, string> = {
 };
 
 export const resolveServiceImage = (imgPath: string | undefined, defaultFallback: string = technicianImg): string => {
-  if (!imgPath) return defaultFallback;
+  if (!imgPath || imgPath.trim() === '') return defaultFallback;
+  if (imgPath.startsWith('data:') || imgPath.startsWith('http://') || imgPath.startsWith('https://') || imgPath.startsWith('blob:')) {
+    return imgPath;
+  }
   if (assetMap[imgPath]) return assetMap[imgPath];
   const basename = imgPath.split('/').pop();
   if (basename && assetMap[basename]) return assetMap[basename];
@@ -126,12 +129,11 @@ export const getStoredServices = (): ServiceItem[] => {
   try {
     const parsed = JSON.parse(saved);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map((s: any, idx: number) => {
-        const fallback = defaultServicesCatalog[idx % defaultServicesCatalog.length];
+      return parsed.map((s: any) => {
         return {
           ...s,
-          thumbnail: resolveServiceImage(s.thumbnail, fallback.thumbnail),
-          showcaseImg: resolveServiceImage(s.showcaseImg, fallback.showcaseImg),
+          thumbnail: resolveServiceImage(s.thumbnail, detailAfterImg),
+          showcaseImg: resolveServiceImage(s.showcaseImg, technicianImg),
         };
       });
     }
@@ -143,16 +145,15 @@ export const getStoredServices = (): ServiceItem[] => {
 
 export const fetchRemoteServices = async (): Promise<ServiceItem[]> => {
   try {
-    const res = await fetch(API_URL, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(API_URL, { signal: AbortSignal.timeout(3500) });
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-        const mapped = json.data.map((s: any, idx: number) => {
-          const fallback = defaultServicesCatalog[idx % defaultServicesCatalog.length];
+        const mapped = json.data.map((s: any) => {
           return {
             ...s,
-            thumbnail: resolveServiceImage(s.thumbnail, fallback.thumbnail),
-            showcaseImg: resolveServiceImage(s.showcaseImg, fallback.showcaseImg),
+            thumbnail: resolveServiceImage(s.thumbnail, detailAfterImg),
+            showcaseImg: resolveServiceImage(s.showcaseImg, technicianImg),
           };
         });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
@@ -178,18 +179,23 @@ export const saveServiceItem = async (service: ServiceItem): Promise<ServiceItem
     updated = [...current, service];
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('localStorage setItem warning:', err);
+  }
   window.dispatchEvent(new Event('cc_services_updated'));
 
   // Sync to backend MongoDB
   try {
-    if (index >= 0) {
-      await fetch(`${API_URL}/${service.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(service)
-      });
-    } else {
+    const method = index >= 0 ? 'PUT' : 'POST';
+    const url = index >= 0 ? `${API_URL}/${service.id}` : API_URL;
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(service)
+    });
+    if (!res.ok && method === 'PUT') {
       await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

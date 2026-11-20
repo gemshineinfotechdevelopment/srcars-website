@@ -6,7 +6,7 @@ import techCarImg from '../assets/tech_car.jpg';
 import detailAfterImg from '../assets/detail_after.jpg';
 import heroBannerVideo from '../assets/hero_banner.mp4';
 import { useServicesList, resolveServiceImage } from '../utils/servicesStore';
-import { useWorksList, type WorkItem } from '../utils/worksStore';
+import { useWorksList, resolveWorkImage, type WorkItem } from '../utils/worksStore';
 import { BeforeAfterModal } from '../components/BeforeAfterModal';
 import {
   DiamondIcon,
@@ -1868,7 +1868,7 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
                   </div>
 
                   <div className="showcase-features-grid">
-                    {activeService.features.map((feat, index) => (
+                    {(activeService.features || []).map((feat, index) => (
                       <div key={index} className="feature-tile">
                         <span className="feature-icon">{getFeatureIcon(index)}</span>
                         <div className="feature-text">
@@ -2029,7 +2029,7 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
                 >
                   <div className="trans-img-frame">
                     <img 
-                      src={item.afterImg || item.img} 
+                      src={resolveWorkImage(item.afterImg || item.img, heroCarImg)} 
                       alt={item.title} 
                       className="trans-img" 
                       onError={(e) => {

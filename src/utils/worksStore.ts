@@ -42,7 +42,10 @@ const assetMap: Record<string, string> = {
 };
 
 export const resolveWorkImage = (imgPath: string | undefined, defaultFallback: string = detailAfterImg): string => {
-  if (!imgPath) return defaultFallback;
+  if (!imgPath || imgPath.trim() === '') return defaultFallback;
+  if (imgPath.startsWith('data:') || imgPath.startsWith('http://') || imgPath.startsWith('https://') || imgPath.startsWith('blob:')) {
+    return imgPath;
+  }
   if (assetMap[imgPath]) return assetMap[imgPath];
   const basename = imgPath.split('/').pop();
   if (basename && assetMap[basename]) return assetMap[basename];
@@ -133,10 +136,9 @@ export const getStoredWorks = (): WorkItem[] => {
   try {
     const parsed = JSON.parse(saved);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map((item: any, idx: number) => {
-        const fallback = defaultWorksCatalog[idx % defaultWorksCatalog.length];
-        const afterResolved = resolveWorkImage(item.afterImg || item.img, fallback.afterImg);
-        const beforeResolved = resolveWorkImage(item.beforeImg, fallback.beforeImg || detailBeforeImg);
+      return parsed.map((item: any) => {
+        const afterResolved = resolveWorkImage(item.afterImg || item.img, detailAfterImg);
+        const beforeResolved = resolveWorkImage(item.beforeImg, detailBeforeImg);
         return {
           ...item,
           beforeImg: beforeResolved,
@@ -153,14 +155,13 @@ export const getStoredWorks = (): WorkItem[] => {
 
 export const fetchRemoteWorks = async (): Promise<WorkItem[]> => {
   try {
-    const res = await fetch(API_URL, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(API_URL, { signal: AbortSignal.timeout(3500) });
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-        const mapped = json.data.map((item: any, idx: number) => {
-          const fallback = defaultWorksCatalog[idx % defaultWorksCatalog.length];
-          const afterResolved = resolveWorkImage(item.afterImg || item.img, fallback.afterImg);
-          const beforeResolved = resolveWorkImage(item.beforeImg, fallback.beforeImg || detailBeforeImg);
+        const mapped = json.data.map((item: any) => {
+          const afterResolved = resolveWorkImage(item.afterImg || item.img, detailAfterImg);
+          const beforeResolved = resolveWorkImage(item.beforeImg, detailBeforeImg);
           return {
             ...item,
             beforeImg: beforeResolved,
@@ -196,18 +197,23 @@ export const saveWorkItem = async (work: WorkItem): Promise<WorkItem[]> => {
     updated = [...current, sanitized];
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('localStorage setItem warning:', err);
+  }
   window.dispatchEvent(new Event('cc_works_updated'));
 
   // Sync to backend MongoDB
   try {
-    if (index >= 0) {
-      await fetch(`${API_URL}/${work.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sanitized)
-      });
-    } else {
+    const method = index >= 0 ? 'PUT' : 'POST';
+    const url = index >= 0 ? `${API_URL}/${work.id}` : API_URL;
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sanitized)
+    });
+    if (!res.ok && method === 'PUT') {
       await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

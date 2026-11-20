@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useWorksList, type WorkItem } from '../utils/worksStore';
+import { useWorksList, resolveWorkImage, type WorkItem } from '../utils/worksStore';
 import { BeforeAfterModal } from '../components/BeforeAfterModal';
 
 interface RecentWorksProps {
@@ -279,7 +279,11 @@ export const RecentWorks: React.FC<RecentWorksProps> = ({ onOpenBooking }) => {
                   onClick={() => setSelectedGalleryWork(item)}
                   title="Click to view Before / After comparison"
                 >
-                  <img src={item.afterImg || item.img} alt={item.title} className="rw-img" />
+                  <img 
+                    src={resolveWorkImage(item.afterImg || item.img)} 
+                    alt={item.title} 
+                    className="rw-img" 
+                  />
                   <span className="rw-tag">{item.category}</span>
                 </div>
                 <div className="rw-card-body">

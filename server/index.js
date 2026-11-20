@@ -26,7 +26,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // In-memory fallback if MongoDB connection is pending or interrupted
 let memorySettings = {
@@ -339,11 +340,20 @@ app.post('/api/services', async (req, res) => {
     };
 
     if (isMongoConnected && mongoose.connection.readyState === 1) {
-      const created = await Service.create(newService);
+      const created = await Service.findOneAndUpdate(
+        { id: newService.id },
+        { $set: newService },
+        { upsert: true, new: true }
+      );
       return res.status(201).json({ success: true, data: created });
     }
 
-    memoryServices.push(newService);
+    const mIdx = memoryServices.findIndex(s => s.id === newService.id);
+    if (mIdx !== -1) {
+      memoryServices[mIdx] = newService;
+    } else {
+      memoryServices.push(newService);
+    }
     return res.status(201).json({ success: true, data: newService });
   } catch (err) {
     console.error('POST /api/services error:', err);
@@ -357,19 +367,22 @@ app.put('/api/services/:id', async (req, res) => {
     const updates = req.body;
 
     if (isMongoConnected && mongoose.connection.readyState === 1) {
-      const updated = await Service.findOneAndUpdate({ id }, { $set: updates }, { new: true });
-      if (updated) {
-        return res.json({ success: true, data: updated });
-      }
+      const updated = await Service.findOneAndUpdate(
+        { id },
+        { $set: updates },
+        { upsert: true, new: true }
+      );
+      return res.json({ success: true, data: updated });
     }
 
     const idx = memoryServices.findIndex(s => s.id === id);
     if (idx !== -1) {
       memoryServices[idx] = { ...memoryServices[idx], ...updates };
       return res.json({ success: true, data: memoryServices[idx] });
+    } else {
+      memoryServices.push({ ...updates, id });
+      return res.json({ success: true, data: { ...updates, id } });
     }
-
-    res.status(404).json({ success: false, error: 'Service not found' });
   } catch (err) {
     console.error('PUT /api/services/:id error:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -427,11 +440,20 @@ app.post('/api/works', async (req, res) => {
     };
 
     if (isMongoConnected && mongoose.connection.readyState === 1) {
-      const created = await Work.create(newWork);
+      const created = await Work.findOneAndUpdate(
+        { id: newWork.id },
+        { $set: newWork },
+        { upsert: true, new: true }
+      );
       return res.status(201).json({ success: true, data: created });
     }
 
-    memoryWorks.push(newWork);
+    const mIdx = memoryWorks.findIndex(w => w.id === newWork.id);
+    if (mIdx !== -1) {
+      memoryWorks[mIdx] = newWork;
+    } else {
+      memoryWorks.push(newWork);
+    }
     return res.status(201).json({ success: true, data: newWork });
   } catch (err) {
     console.error('POST /api/works error:', err);
@@ -448,10 +470,11 @@ app.put('/api/works/:id', async (req, res) => {
     }
 
     if (isMongoConnected && mongoose.connection.readyState === 1) {
-      const updated = await Work.findOneAndUpdate({ id }, { $set: updates }, { new: true });
-      if (!updated) {
-        return res.status(404).json({ success: false, error: 'Work item not found' });
-      }
+      const updated = await Work.findOneAndUpdate(
+        { id },
+        { $set: updates },
+        { upsert: true, new: true }
+      );
       return res.json({ success: true, data: updated });
     }
 
@@ -459,6 +482,9 @@ app.put('/api/works/:id', async (req, res) => {
     if (idx >= 0) {
       memoryWorks[idx] = { ...memoryWorks[idx], ...updates };
       return res.json({ success: true, data: memoryWorks[idx] });
+    } else {
+      memoryWorks.push({ ...updates, id });
+      return res.json({ success: true, data: { ...updates, id } });
     }
     return res.status(404).json({ success: false, error: 'Work not found in memory' });
   } catch (err) {
