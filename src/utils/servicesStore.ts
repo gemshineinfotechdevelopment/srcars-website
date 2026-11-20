@@ -58,7 +58,7 @@ export const defaultServicesCatalog: ServiceItem[] = [
     thumbnail: detailAfterImg,
     shortDesc: 'Multi-layer high-solids hydrophobic coating delivering deep optical gloss & UV defense.',
     showcaseTitle: 'CERAMIC COATING & PAINT ARMOR',
-    showcaseImg: technicianImg,
+    showcaseImg: detailAfterImg,
     features: [
       { title: '10H Diamond Hardness', desc: 'Highest scratch resistance certified by international hardness tests.' },
       { title: 'Dual-Layer Self-Healing Matrix', desc: 'Micro-scratches vanish under direct solar heat activation.' },
@@ -133,7 +133,7 @@ export const getStoredServices = (): ServiceItem[] => {
         return {
           ...s,
           thumbnail: resolveServiceImage(s.thumbnail, detailAfterImg),
-          showcaseImg: resolveServiceImage(s.showcaseImg, technicianImg),
+          showcaseImg: resolveServiceImage(s.thumbnail || s.showcaseImg, detailAfterImg),
         };
       });
     }
@@ -153,7 +153,7 @@ export const fetchRemoteServices = async (): Promise<ServiceItem[]> => {
           return {
             ...s,
             thumbnail: resolveServiceImage(s.thumbnail, detailAfterImg),
-            showcaseImg: resolveServiceImage(s.showcaseImg, technicianImg),
+            showcaseImg: resolveServiceImage(s.thumbnail || s.showcaseImg, detailAfterImg),
           };
         });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));

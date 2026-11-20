@@ -397,10 +397,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
       name: '',
       shortName: '',
       tag: 'HOT',
-      thumbnail: '/assets/detail_after.jpg',
+      thumbnail: '',
       shortDesc: '',
       showcaseTitle: '',
-      showcaseImg: '/assets/service_technician.jpg',
+      showcaseImg: '',
       features: [
         { title: '', desc: '' },
         { title: '', desc: '' },
@@ -429,9 +429,12 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
     const idToUse = editingService?.id || serviceFormData.id || 'service-' + Date.now();
+    const imgToUse = serviceFormData.thumbnail || '/assets/detail_after.jpg';
     const payload: ServiceItem = {
       ...serviceFormData,
       id: idToUse,
+      thumbnail: imgToUse,
+      showcaseImg: imgToUse,
       shortName: serviceFormData.shortName || serviceFormData.name.split(' ')[0],
       showcaseTitle: serviceFormData.showcaseTitle || serviceFormData.name.toUpperCase(),
       features: (serviceFormData.features || []).filter(f => f.title && f.title.trim() !== ''),
@@ -545,7 +548,11 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     if (!file) return;
     const base64 = await compressImageFile(file, 800, 0.82);
     if (base64) {
-      setServiceFormData(prev => ({ ...prev, thumbnail: base64 }));
+      setServiceFormData(prev => ({ 
+        ...prev, 
+        thumbnail: base64,
+        showcaseImg: base64 
+      }));
     }
   };
 
@@ -596,7 +603,14 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const vehicleStats = React.useMemo(() => {
     const counts: { [car: string]: number } = {};
     bookings.forEach((b) => {
-      const car = b.carModel ? b.carModel.trim() : 'Unspecified Vehicle';
+      let car = b.carModel ? b.carModel.trim() : 'Unspecified Vehicle';
+      // Strip vehicle registration number pattern (e.g. TN 01 AB 1234), bracketed tags [TN...], and boundary punctuation
+      car = car
+        .replace(/\[.*?\]/g, '')
+        .replace(/\b[A-Z]{2}[-\s]?\d{1,2}[-\s]?[A-Z]{1,3}[-\s]?\d{1,4}\b/gi, '')
+        .replace(/^[-–/:\s]+|[-–/:\s]+$/g, '')
+        .trim();
+      if (!car) car = 'Unspecified Vehicle';
       counts[car] = (counts[car] || 0) + 1;
     });
 
@@ -3377,31 +3391,33 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                   <input 
                     type="text" 
                     className="admin-search-input" 
+                    style={{ height: '42px', padding: '10px 14px' }}
                     value={serviceFormData.tag}
                     onChange={(e) => setServiceFormData({ ...serviceFormData, tag: e.target.value.toUpperCase() })}
                     placeholder="e.g. HOT, RESTORE, ULTIMATE"
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>SERVICE THUMBNAIL</label>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>UPLOAD IMAGE *</label>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <label style={{ 
                       flex: 1, 
+                      height: '42px',
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
                       gap: '6px', 
-                      padding: '9px 12px', 
+                      padding: '0 12px', 
                       background: 'var(--bg-subtle)', 
-                      border: '1px dashed var(--border-yellow)', 
-                      borderRadius: '8px', 
+                      border: '1px dashed var(--yellow-dark, #f59e0b)', 
+                      borderRadius: '6px', 
                       cursor: 'pointer', 
                       fontSize: '0.78rem', 
                       fontWeight: 700, 
                       color: 'var(--text-primary)',
                       boxSizing: 'border-box'
                     }}>
-                      📁 Upload Image
+                      📁 {serviceFormData.thumbnail ? 'Change Image' : 'Upload Image'}
                       <input 
                         type="file" 
                         accept="image/*" 
@@ -3410,7 +3426,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       />
                     </label>
                     {serviceFormData.thumbnail && (
-                      <div style={{ width: '38px', height: '38px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+                      <div style={{ width: '42px', height: '42px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-subtle)', flexShrink: 0 }}>
                         <img 
                           src={resolveServiceImage(serviceFormData.thumbnail)} 
                           alt="Thumbnail Preview" 

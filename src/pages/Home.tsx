@@ -181,6 +181,14 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
     }
   }, []);
 
+  // Automatically reveal hero text, CTA button & trust badges over video after 2 seconds delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsHeroRevealed(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Handle direct navigation or URL hash to sections like #services
   useEffect(() => {
     const handleInitialHash = () => {
@@ -1280,9 +1288,10 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
           .hero-video-overlay-content {
             position: relative !important;
             inset: auto !important;
-            transform: none !important;
-            opacity: 1 !important;
-            pointer-events: auto !important;
+            transform: translate3d(0, 30px, 0) !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1) !important;
             padding: 75px 16px 30px !important;
             width: 100% !important;
             display: flex !important;
@@ -1290,6 +1299,11 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
             align-items: center !important;
             text-align: center !important;
             z-index: 10 !important;
+          }
+          .hero-video-overlay-content.revealed {
+            transform: translate3d(0, 0, 0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
           }
           .hero-overlay-inner {
             width: 100% !important;
@@ -1692,9 +1706,9 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
               <div className="hero-video-overlay-bottom" />
             </div>
 
-            {/* Overlaid Content Layer: Glides slowly UP over playing video on mouse scroll (Desktop) / Normal Flow (Mobile) */}
+            {/* Overlaid Content Layer: Glides slowly UP over playing video on mouse scroll (Desktop) / Auto-revealed after 2s */}
             <div 
-              className={`hero-video-overlay-content ${isHeroRevealed || isMobile ? 'revealed' : ''}`}
+              className={`hero-video-overlay-content ${isHeroRevealed ? 'revealed' : ''}`}
             >
               <div className="hero-overlay-inner">
                 {/* Marked Headline & Subtitle */}
@@ -1854,11 +1868,11 @@ export const Home: React.FC<HomeProps> = ({ onOpenBooking, onNavigate }) => {
                 >
                   <div className="showcase-banner">
                     <img 
-                      src={resolveServiceImage(activeService.showcaseImg, technicianImg)} 
+                      src={resolveServiceImage(activeService.thumbnail || activeService.showcaseImg, detailAfterImg)} 
                       alt={activeService.showcaseTitle} 
                       className="showcase-img" 
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = technicianImg;
+                        (e.target as HTMLImageElement).src = detailAfterImg;
                       }}
                     />
                     <div className="showcase-gradient-overlay"></div>
